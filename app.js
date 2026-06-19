@@ -1303,32 +1303,17 @@ document.getElementById('student-report-modal').addEventListener('click', functi
 });
 
 document.getElementById('download-student-pdf-btn').addEventListener('click', () => {
-    const originalElement = document.getElementById('student-report-content');
+    const element = document.getElementById('student-report-content');
     
-    // Create a temporary clone wrapper to ensure full visibility for html2canvas
-    const wrapper = document.createElement('div');
-    wrapper.style.position = 'absolute';
-    wrapper.style.top = '0';
-    wrapper.style.left = '0';
-    wrapper.style.width = '600px';
-    wrapper.style.zIndex = '-9999';
-    wrapper.style.background = '#ffffff';
-    
-    const clone = originalElement.cloneNode(true);
-    wrapper.appendChild(clone);
-    document.body.appendChild(wrapper);
-
     const opt = {
-        margin:       0.5,
+        margin:       0.3,
         filename:     'Student_Report.pdf',
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, scrollY: 0, windowWidth: 800 },
+        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
         jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
     };
     
-    html2pdf().set(opt).from(wrapper).save().then(() => {
-        document.body.removeChild(wrapper);
-    });
+    html2pdf().set(opt).from(element).save();
 });
 
 document.getElementById('admin-logout-btn').addEventListener('click', () => {
