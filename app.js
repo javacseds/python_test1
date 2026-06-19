@@ -229,7 +229,8 @@ function seededShuffle(arr, seed) {
 }
 
 function getStudentQuestions(studentIdx) {
-  const seed = (0xDEADBEEF ^ (studentIdx * 6271 + 31337)) >>> 0;
+  // Changed magic numbers to completely reshuffle questions for all students
+  const seed = (0xCAFEBABE ^ (studentIdx * 8191 + 54321)) >>> 0;
   const allIdxs = [...Array(25).keys()];
   const shuffled = seededShuffle(allIdxs, seed);
   return shuffled.slice(0, 5); // 5 unique question indices
