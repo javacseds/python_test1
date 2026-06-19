@@ -1149,7 +1149,16 @@ async function renderAdmin() {
   }, 100);
   
   // 2. Render Table
-  students.forEach((s, i) => {
+  // Sort students by branch, then by roll number ascending
+  let sortedStudents = [...students].sort((a, b) => {
+      if (a.branch < b.branch) return -1;
+      if (a.branch > b.branch) return 1;
+      if (a.roll < b.roll) return -1;
+      if (a.roll > b.roll) return 1;
+      return 0;
+  });
+  
+  sortedStudents.forEach((s, i) => {
     const res = results[s.roll];
     const isSub = !!res;
     const isAbs = res && res.status === 'ABSENT';
