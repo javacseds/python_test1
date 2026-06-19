@@ -218,8 +218,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--text);m
     /* Admin Dashboard Printing */
     body.printing-admin #admin-screen { display: block !important; background: #fff !important; }
     body.printing-admin #admin-report-container { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
-    body.printing-admin #admin-analytics { display: flex !important; gap: 20px !important; margin-bottom: 20px !important; }
-    body.printing-admin #admin-analytics > div { border: 1px solid #000 !important; background: #fff !important; padding: 15px !important; flex: 1 !important; page-break-inside: avoid; }
+    
+    /* Fix flexbox page-break bug by converting to block/inline-block */
+    body.printing-admin #admin-analytics { display: block !important; margin-bottom: 20px !important; }
+    body.printing-admin #admin-analytics > div { 
+        display: inline-block !important; 
+        width: 48% !important; 
+        margin: 1% !important; 
+        border: 1px solid #000 !important; 
+        background: #fff !important; 
+        padding: 15px !important; 
+        box-sizing: border-box !important;
+        page-break-inside: avoid !important; 
+        break-inside: avoid !important; 
+    }
     body.printing-admin #admin-table th:last-child, 
     body.printing-admin #admin-table td:last-child { display: none !important; }
     body.printing-admin #admin-table th, 
