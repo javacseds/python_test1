@@ -995,9 +995,8 @@ document.getElementById('submit-modal').addEventListener('click', function(e) {
 // ═══════════════════════════════════════════════════════
 //  ADMIN DASHBOARD, ANALYTICS & PDF REPORTS
 // ═══════════════════════════════════════════════════════
-function saveResultToLocal(roll, attemptedCount, marks, status, questionDetails = [], timeTaken = 0) {
-  let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
-  results[roll] = {
+async function saveResultToLocal(roll, attemptedCount, marks, status, questionDetails = [], timeTaken = 0) {
+  const resultData = {
     marks: marks,
     attempts: attemptedCount,
     status: status || "SUBMITTED",
@@ -1005,7 +1004,19 @@ function saveResultToLocal(roll, attemptedCount, marks, status, questionDetails 
     questionDetails: questionDetails,
     timeTaken: timeTaken
   };
+
+  let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
+  results[roll] = resultData;
   localStorage.setItem('assessment_results', JSON.stringify(results));
+
+  if (window.firebaseDb && window.firebaseSetDoc) {
+     try {
+         await window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", roll), resultData);
+         console.log("Successfully synced to Firebase!");
+     } catch(e) {
+         console.error("Failed to sync to Firebase", e);
+     }
+  }
 }
 
 window.markAbsent = function(roll) {
@@ -1027,11 +1038,24 @@ window.allowRetest = function(roll) {
 let chartInstance1 = null;
 let chartInstance2 = null;
 
-function renderAdmin() {
+async function renderAdmin() {
   const tbody = document.getElementById('admin-tbody');
-  tbody.innerHTML = '';
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted);">Loading live results from Firebase...</td></tr>';
   
   let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
+  
+  if (window.firebaseDb && window.firebaseGetDocs) {
+      try {
+          const querySnapshot = await window.firebaseGetDocs(window.firebaseCollection(window.firebaseDb, "results"));
+          querySnapshot.forEach((doc) => {
+              results[doc.id] = doc.data();
+          });
+          localStorage.setItem('assessment_results', JSON.stringify(results));
+      } catch (e) {
+          console.error("Error fetching from Firebase. Using local results.", e);
+      }
+  }
+  tbody.innerHTML = '';
   
   // 1. Calculate Analytics
   let branchStats = {};
