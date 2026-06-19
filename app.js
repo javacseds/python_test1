@@ -1302,18 +1302,48 @@ document.getElementById('student-report-modal').addEventListener('click', functi
     if (e.target === this) this.classList.remove('active');
 });
 
+function printHtml(htmlContent, title) {
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write('<html><head><title>' + title + '</title>');
+    doc.write(`
+        <style>
+            body { font-family: 'Segoe UI', Roboto, sans-serif; color: #000; padding: 20px; background: #fff; }
+            table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+            th, td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+            th { background-color: #f8fafc; font-weight: bold; }
+            tr { page-break-inside: avoid; }
+            pre { background: #f8fafc; padding: 12px; border: 1px solid #e2e8f0; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 12px; border-radius: 4px; }
+            h2, h3, h1 { color: #0f172a; margin-top: 0; }
+            @page { margin: 1cm; }
+            .analytics-grid { display: flex; gap: 20px; margin-bottom: 30px; flex-wrap: wrap; }
+            .analytics-card { flex: 1; min-width: 200px; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; text-align: center; }
+        </style>
+    `);
+    doc.write('</head><body>');
+    doc.write(htmlContent);
+    doc.write('</body></html>');
+    doc.close();
+    
+    iframe.contentWindow.focus();
+    setTimeout(() => {
+        iframe.contentWindow.print();
+        setTimeout(() => document.body.removeChild(iframe), 2000);
+    }, 500);
+}
+
 document.getElementById('download-student-pdf-btn').addEventListener('click', () => {
-    const element = document.getElementById('student-report-content');
-    
-    const opt = {
-        margin:       0.3,
-        filename:     'Student_Report.pdf',
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-    
-    html2pdf().set(opt).from(element).save();
+    const clone = document.getElementById('student-report-content').cloneNode(true);
+    printHtml(clone.innerHTML, 'Student_Report');
 });
 
 document.getElementById('admin-logout-btn').addEventListener('click', () => {
