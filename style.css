@@ -206,3 +206,36 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy);color:var(--text);m
 .login-tab { flex: 1; padding: 10px; border-radius: 6px; font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 600; color: var(--muted); border: none; background: transparent; cursor: pointer; transition: all 0.2s; }
 .login-tab:hover { color: var(--text); background: rgba(255,255,255,0.05); }
 .login-tab.active { color: var(--navy); background: var(--blue-light); box-shadow: 0 4px 12px rgba(56,189,248,0.2); }
+
+/* ── NATIVE PRINT STYLES ──────────────────────────────── */
+@media print {
+    body { background: #fff !important; color: #000 !important; min-height: auto; overflow: visible !important; }
+    * { color: #000 !important; text-shadow: none !important; box-shadow: none !important; }
+    
+    /* Hide everything by default */
+    #login-screen, #exam-screen, #timeout-screen, #submitted-screen, .e-header, .modal-btns, #close-report-icon, button, .clear-btn, .run-btn { display: none !important; }
+    
+    /* Admin Dashboard Printing */
+    body.printing-admin #admin-screen { display: block !important; background: #fff !important; }
+    body.printing-admin #admin-report-container { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: none !important; }
+    body.printing-admin #admin-analytics { display: flex !important; gap: 20px !important; margin-bottom: 20px !important; }
+    body.printing-admin #admin-analytics > div { border: 1px solid #000 !important; background: #fff !important; padding: 15px !important; flex: 1 !important; page-break-inside: avoid; }
+    body.printing-admin #admin-table th:last-child, 
+    body.printing-admin #admin-table td:last-child { display: none !important; }
+    body.printing-admin #admin-table th, 
+    body.printing-admin #admin-table td { border: 1px solid #000 !important; padding: 8px !important; }
+    
+    /* Student Report Modal Printing */
+    body.printing-student #admin-screen { display: none !important; }
+    body.printing-student #student-report-modal { display: block !important; position: static !important; background: #fff !important; }
+    body.printing-student .modal-card { max-width: 100% !important; border: none !important; padding: 0 !important; margin: 0 !important; }
+    body.printing-student #student-report-content { border: none !important; }
+    body.printing-student pre { border: 1px solid #000 !important; padding: 10px !important; white-space: pre-wrap !important; word-wrap: break-word !important; }
+    
+    /* Generic Table Fixes */
+    table { width: 100% !important; border-collapse: collapse !important; page-break-inside: auto; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    thead { display: table-header-group; }
+    tfoot { display: table-footer-group; }
+    @page { margin: 0.5in; }
+}
