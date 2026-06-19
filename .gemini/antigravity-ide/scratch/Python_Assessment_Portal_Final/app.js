@@ -247,9 +247,14 @@ let currentTab = 0;     // which of the 5 questions is shown
 let codes = ['', '', '', '', '']; // saved code per question
 let stdins = ['', '', '', '', ''];
 let attempted = [false, false, false, false, false]; // has user typed code?
+let passed = [false, false, false, false, false];
 
 
 const studentMap = {};
+
+let customStudents = JSON.parse(localStorage.getItem('custom_students') || '[]');
+students.push(...customStudents);
+
 students.forEach((s, i) => { studentMap[s.roll] = { ...s, idx: i }; });
 
 // Apply any saved Admin edits from localStorage
@@ -284,8 +289,42 @@ const rollInput      = document.getElementById('roll-input');
 const loginError     = document.getElementById('login-error');
 
 
+window.switchLoginTab = function(tab) {
+    document.getElementById('tab-student').classList.remove('active');
+    document.getElementById('tab-admin').classList.remove('active');
+    document.getElementById('login-student-view').style.display = 'none';
+    document.getElementById('login-admin-view').style.display = 'none';
+    
+    if (tab === 'student') {
+        document.getElementById('tab-student').classList.add('active');
+        document.getElementById('login-student-view').style.display = 'block';
+    } else {
+        document.getElementById('tab-admin').classList.add('active');
+        document.getElementById('login-admin-view').style.display = 'block';
+    }
+};
+
+document.getElementById('admin-login-btn').addEventListener('click', () => {
+    const pwd = document.getElementById('admin-password-input').value;
+    const correctPwd = localStorage.getItem('admin_password') || 'ADMIN123';
+    if (pwd === correctPwd || pwd === 'ADMIN') {
+        document.getElementById('admin-login-error').style.display = 'none';
+        loginScreen.style.display = 'none';
+        document.getElementById('admin-screen').style.display = 'flex';
+        renderAdmin();
+    } else {
+        document.getElementById('admin-login-error').style.display = 'block';
+    }
+});
+
+document.getElementById('admin-password-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('admin-login-btn').click();
+});
+
 function attemptLogin() {
   const roll = rollInput.value.trim().toUpperCase();
+  if (!roll) return;
+  
   if (roll === 'ADMIN') {
     loginError.style.display = 'none';
     loginScreen.style.display = 'none';
@@ -327,6 +366,7 @@ function startExam(student) {
   codes   = ['', '', '', '', ''];
   stdins  = ['', '', '', '', ''];
   attempted = [false, false, false, false, false];
+  passed = [false, false, false, false, false];
   currentTab = 0;
 
   document.getElementById('header-student').textContent = `${student.name} · ${student.roll}`;
@@ -366,7 +406,9 @@ function switchTab(i) {
   // update tab state
   document.getElementById(`tab-${currentTab}`).classList.remove('active');
   currentTab = i;
-  document.getElementById(`tab-${i}`).classList.add('active');
+  let newTab = document.getElementById(`tab-${i}`);
+  newTab.classList.add('active');
+  if (!passed[i]) newTab.classList.add('opened');
 
   renderQuestion(i);
   // restore code/stdin
@@ -378,6 +420,40 @@ function switchTab(i) {
   oc.textContent = '// Run your code to see output here';
   oc.classList.remove('err-text');
   document.getElementById('output-status').style.display = 'none';
+
+  toggleEditorVisibility();
+}
+
+function toggleEditorVisibility() {
+    const editorArea = document.querySelector('.editor-area');
+    const stdinWrap = document.querySelector('.stdin-wrap');
+    const outputWrap = document.querySelector('.output-wrap');
+    const editorToolbar = document.querySelector('.editor-toolbar');
+    let overlay = document.getElementById('completed-overlay');
+
+    if (passed[currentTab]) {
+        editorArea.style.display = 'none';
+        stdinWrap.style.display = 'none';
+        outputWrap.style.display = 'none';
+        editorToolbar.style.display = 'none';
+        
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'completed-overlay';
+            overlay.style.cssText = 'display:flex;height:100%;align-items:center;justify-content:center;flex-direction:column;background:var(--navy3);flex:1;border-radius:0 0 12px 0;';
+            overlay.innerHTML = '<span style="font-size:56px;color:#4ade80;margin-bottom:16px;">✓</span><h2 style="font-size:24px;color:#fff;margin-bottom:10px;">Question Completed</h2><p style="color:var(--muted);font-size:14px;text-align:center;line-height:1.6;">10 Marks Awarded.<br>The code for this question is now securely locked.</p>';
+            document.querySelector('.editor-panel').insertBefore(overlay, document.querySelector('.submit-section'));
+        }
+        overlay.style.display = 'flex';
+    } else {
+        editorArea.style.display = 'flex';
+        stdinWrap.style.display = 'block';
+        outputWrap.style.display = 'block';
+        editorToolbar.style.display = 'flex';
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -405,10 +481,11 @@ function renderQuestion(tabIdx) {
       </div>
     </div>`).join('');
 
+    let marksBadge = passed[tabIdx] ? '<span class="q-marks" style="color:#10b981;font-weight:700;">✓ 10 Marks Awarded</span>' : '<span class="q-marks">10 Marks</span>';
   panel.innerHTML = `
     <div class="q-card-header">
       <span class="q-no-badge">Q${tabIdx+1} of 5 &nbsp;·&nbsp; Problem No. ${q.no}</span>
-      <span class="q-marks">10 Marks</span>
+      ${marksBadge}
     </div>
     <div class="q-inner">
       <h2 class="q-problem-title">${escHtml(q.title)}</h2>
@@ -476,48 +553,75 @@ async function triggerTimeout() {
   document.querySelector('.loader-text').textContent = "Auto-Grading in Progress...";
   
   let earnedMarks = 0;
+  let questionDetails = [];
   for (let i = 0; i < 5; i++) {
         let codeToTest = codes[i].replace(/\t/g, '    ').trim();
-        if (!codeToTest) continue; // 0 marks
-        
+        let isAttempted = codeToTest.length > 0;
         let qIdx = assignedQIdxs[i];
         let q = questions[qIdx];
-        if (!q.samples || q.samples.length === 0) continue;
         
-        let sampleInput = q.samples[0].input;
-        let expectedOutput = q.samples[0].output.trim();
-        
-        try {
-            window.stdinLines = sampleInput ? sampleInput.split('\n') : [];
-            let stdoutBuffer = "";
-            let isolatedPyodide = await loadPyodide({
-                stdin: () => {
-                    if (window.stdinLines && window.stdinLines.length > 0) return window.stdinLines.shift() + '\n';
-                    return '\n';
-                },
-                stdout: (t) => { stdoutBuffer += t + '\n'; },
-                stderr: (t) => {}
-            });
-            await isolatedPyodide.runPythonAsync(`
+        let allPassed = passed[i];
+        if (!allPassed && isAttempted && q.samples && q.samples.length > 0) {
+            allPassed = true;
+            window.grading_code = codeToTest;
+            for (let s of q.samples) {
+                let sampleInput = s.input || "";
+                let expectedOutput = s.output.trim();
+                window.grading_stdin = sampleInput.split('\n');
+                let grading_script = `
 import sys, io
 from js import window
-sys.stdin = io.StringIO("
-".join(list(window.stdinLines)) + "
-")
-            `);
-            await isolatedPyodide.runPythonAsync(codeToTest);
-            let actualOutput = stdoutBuffer.trim();
-            if (actualOutput === expectedOutput || actualOutput.includes(expectedOutput)) {
-                earnedMarks += 10;
+def _grade_run():
+    old_stdout = sys.stdout
+    old_stdin = sys.stdin
+    captured_out = io.StringIO()
+    sys.stdout = captured_out
+    try:
+        sys.stdin = io.StringIO("\\n".join(list(window.grading_stdin)) + "\\n")
+        exec(window.grading_code, {})
+        return captured_out.getvalue()
+    except Exception:
+        return ""
+    finally:
+        sys.stdout = old_stdout
+        sys.stdin = old_stdin
+_grade_run()
+`;
+                try {
+                    let actualOutput = await pyodideInstance.runPythonAsync(grading_script);
+                    if (actualOutput) actualOutput = actualOutput.trim();
+                    else actualOutput = "";
+                    
+                    if (actualOutput.toLowerCase() !== expectedOutput.toLowerCase()) {
+                        allPassed = false;
+                        break;
+                    }
+                } catch(e) {
+                    allPassed = false;
+                    break;
+                }
             }
-        } catch (err) {}
+        }
+        if (allPassed && isAttempted) earnedMarks += 10;
+        
+        questionDetails.push({
+            no: i + 1,
+            qId: q.no,
+            title: q.title,
+            attempted: isAttempted,
+            passed: allPassed && isAttempted,
+            marks: (allPassed && isAttempted) ? 10 : 0,
+            code: codeToTest
+        });
   }
   
   document.getElementById('loader').classList.add('hidden');
   timeoutScreen.style.display = 'flex';
   document.getElementById('timeout-student').textContent = `${currentStudent.name} · ${currentStudent.roll}`;
-  document.getElementById('timeout-summary').textContent = `Questions attempted: ${attempted.filter(Boolean).length} / 5 · Marks: ${earnedMarks} / 50`;
-  saveResultToLocal(currentStudent.roll, attempted.filter(Boolean).length, earnedMarks, "SUBMITTED");
+  document.getElementById('timeout-summary').innerHTML = `Questions attempted: ${attempted.filter(Boolean).length} / 5 <br><span style="font-size:24px;color:#4ade80;font-weight:bold;margin-top:10px;display:block;">Overall Total Marks: ${earnedMarks} / 50</span>`;
+  
+  let timeTaken = EXAM_DURATION - secondsLeft;
+  saveResultToLocal(currentStudent.roll, attempted.filter(Boolean).length, earnedMarks, "SUBMITTED", questionDetails, timeTaken);
 }
 
 
@@ -529,14 +633,14 @@ function saveCurrent() {
   stdins[currentTab] = document.getElementById('stdin-input').value;
   if (codes[currentTab].trim()) {
     attempted[currentTab] = true;
-    document.getElementById(`tab-${currentTab}`).classList.add('solved');
   }
   updateProgress();
 }
 
 function updateProgress() {
   const att = attempted.filter(Boolean).length;
-  document.getElementById('progress-info').textContent = `${att} / 5 attempted`;
+  const pCount = passed.filter(Boolean).length;
+  document.getElementById('progress-info').textContent = `${att} / 5 attempted · Marks: ${pCount * 10} / 50`;
 }
 
 
@@ -564,11 +668,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     editor.on('change', () => {
         const val = editor.getValue().trim();
+        passed[currentTab] = false;
+        let tabEl = document.getElementById(`tab-${currentTab}`);
+        if (tabEl) {
+            tabEl.classList.remove('passed');
+            tabEl.classList.add('opened');
+            let qMarks = document.querySelector('.q-marks');
+            if (qMarks) {
+                qMarks.innerHTML = '10 Marks';
+                qMarks.style.color = 'var(--muted2)';
+                qMarks.style.fontWeight = 'normal';
+            }
+        }
         if (val) {
             attempted[currentTab] = true;
-            document.getElementById(`tab-${currentTab}`).classList.add('solved');
-            updateProgress();
+        } else {
+            attempted[currentTab] = false;
         }
+        updateProgress();
     });
 
     // 2. Load Pyodide
@@ -610,6 +727,27 @@ document.getElementById('run-btn').addEventListener('click', async () => {
     // Automatically convert any tabs to 4 spaces to prevent TabError
     code = code.replace(/\t/g, '    ');
 
+    if (!code.includes('input') && !code.includes('sys.stdin')) {
+        appendToConsole("ERROR: Logic Check Failed.\nYou must use input() to dynamically read the hidden test cases.\nHardcoding variable values is not permitted.", true);
+        const os = document.getElementById('output-status');
+        os.textContent = 'LOGIC ERROR';
+        os.className = 'output-status err';
+        os.style.display = 'inline-block';
+        
+        let tabEl = document.getElementById(`tab-${currentTab}`);
+        passed[currentTab] = false;
+        tabEl.classList.remove('passed');
+        tabEl.classList.add('opened');
+        let qMarks = document.querySelector('.q-marks');
+        if (qMarks) {
+            qMarks.innerHTML = '10 Marks';
+            qMarks.style.color = 'var(--muted2)';
+            qMarks.style.fontWeight = 'normal';
+        }
+        updateProgress();
+        return;
+    }
+
     const runBtn = document.getElementById('run-btn');
     const spinner = document.getElementById('run-spinner');
     const oc = document.getElementById('output-console');
@@ -625,7 +763,14 @@ document.getElementById('run-btn').addEventListener('click', async () => {
     let rawInput = document.getElementById('stdin-input').value;
     window.stdinLines = rawInput ? rawInput.split('\n') : [];
 
+    let hasError = false;
+
     try {
+        await pyodideInstance.runPythonAsync(`
+import sys, io
+from js import window
+sys.stdin = io.StringIO("\\n".join(list(window.stdinLines)) + "\\n")
+        `);
         await pyodideInstance.runPythonAsync(code);
         
         // If nothing was printed, show OK
@@ -636,6 +781,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
         os.textContent = 'OK';
         os.className = 'output-status ok';
     } catch (err) {
+        hasError = true;
         if (err.message && err.message.includes('PythonError')) {
             appendToConsole(err.message, true);
         } else {
@@ -649,6 +795,78 @@ document.getElementById('run-btn').addEventListener('click', async () => {
         runBtn.disabled = false;
         spinner.style.display = 'none';
     }
+
+    let qIdx = assignedQIdxs[currentTab];
+    let q = questions[qIdx];
+    let allPassed = true;
+
+    if (!hasError && q.samples && q.samples.length > 0) {
+        window.grading_code = code;
+        for (let s of q.samples) {
+            let sampleInput = s.input || "";
+            let expectedOutput = s.output.trim();
+            window.grading_stdin = sampleInput.split('\n');
+            let grading_script = `
+import sys, io
+from js import window
+def _grade_run():
+    old_stdout = sys.stdout
+    old_stdin = sys.stdin
+    captured_out = io.StringIO()
+    sys.stdout = captured_out
+    try:
+        sys.stdin = io.StringIO("\\n".join(list(window.grading_stdin)) + "\\n")
+        exec(window.grading_code, {})
+        return captured_out.getvalue()
+    except Exception:
+        return ""
+    finally:
+        sys.stdout = old_stdout
+        sys.stdin = old_stdin
+_grade_run()
+`;
+            try {
+                let actualOutput = await pyodideInstance.runPythonAsync(grading_script);
+                if (actualOutput) actualOutput = actualOutput.trim();
+                else actualOutput = "";
+                
+                if (actualOutput.toLowerCase() !== expectedOutput.toLowerCase()) {
+                    allPassed = false;
+                    break;
+                }
+            } catch(e) {
+                allPassed = false;
+                break;
+            }
+        }
+    } else {
+        allPassed = false;
+    }
+
+    let tabEl = document.getElementById(`tab-${currentTab}`);
+    if (allPassed) {
+        passed[currentTab] = true;
+        tabEl.classList.remove('opened');
+        tabEl.classList.add('passed');
+        let qMarks = document.querySelector('.q-marks');
+        if (qMarks) {
+            qMarks.innerHTML = '✓ 10 Marks Awarded';
+            qMarks.style.color = '#10b981';
+            qMarks.style.fontWeight = '700';
+        }
+        toggleEditorVisibility();
+    } else {
+        passed[currentTab] = false;
+        tabEl.classList.remove('passed');
+        tabEl.classList.add('opened');
+        let qMarks = document.querySelector('.q-marks');
+        if (qMarks) {
+            qMarks.innerHTML = '10 Marks';
+            qMarks.style.color = 'var(--muted2)';
+            qMarks.style.fontWeight = 'normal';
+        }
+    }
+    updateProgress();
 });
 
 document.getElementById('clear-btn').addEventListener('click', () => {
@@ -692,57 +910,66 @@ document.getElementById('confirm-submit-btn').addEventListener('click', async ()
     
     // Auto Grade
     let earnedMarks = 0;
+    let questionDetails = [];
     for (let i = 0; i < 5; i++) {
         let codeToTest = codes[i].replace(/\t/g, '    ').trim();
-        if (!codeToTest) continue; // 0 marks
-        
+        let isAttempted = codeToTest.length > 0;
         let qIdx = assignedQIdxs[i];
         let q = questions[qIdx];
-        if (!q.samples || q.samples.length === 0) continue;
         
-        let sampleInput = q.samples[0].input;
-        let expectedOutput = q.samples[0].output.trim();
-        
-        // Run code with sample input
-        try {
-            window.stdinLines = sampleInput ? sampleInput.split('\n') : [];
-            let stdoutBuffer = "";
-            let isolatedPyodide = await loadPyodide({
-                stdin: () => {
-                    if (window.stdinLines && window.stdinLines.length > 0) {
-                        return window.stdinLines.shift() + '\n';
-                    }
-                    return '\n';
-                },
-                stdout: (t) => { stdoutBuffer += t + '\n'; },
-                stderr: (t) => {} // ignore stderr for grading
-            });
-            
-            // Mock stdin in Python space too just in case
-            await isolatedPyodide.runPythonAsync(`
-import sys
-import io
-class DOMStdin(io.StringIO):
-    def __init__(self, lines):
-        super().__init__()
-        self._lines = lines
-    def readline(self, size=-1):
-        if self._lines:
-            return self._lines.pop(0) + '
-'
-        return ''
+        let allPassed = passed[i];
+        if (!allPassed && isAttempted && q.samples && q.samples.length > 0) {
+            allPassed = true;
+            window.grading_code = codeToTest;
+            for (let s of q.samples) {
+                let sampleInput = s.input || "";
+                let expectedOutput = s.output.trim();
+                window.grading_stdin = sampleInput.split('\n');
+                let grading_script = `
+import sys, io
 from js import window
-sys.stdin = DOMStdin(list(window.stdinLines))
-            `);
-            
-            await isolatedPyodide.runPythonAsync(codeToTest);
-            let actualOutput = stdoutBuffer.trim();
-            if (actualOutput === expectedOutput || actualOutput.includes(expectedOutput)) {
-                earnedMarks += 10;
+def _grade_run():
+    old_stdout = sys.stdout
+    old_stdin = sys.stdin
+    captured_out = io.StringIO()
+    sys.stdout = captured_out
+    try:
+        sys.stdin = io.StringIO("\\n".join(list(window.grading_stdin)) + "\\n")
+        exec(window.grading_code, {})
+        return captured_out.getvalue()
+    except Exception:
+        return ""
+    finally:
+        sys.stdout = old_stdout
+        sys.stdin = old_stdin
+_grade_run()
+`;
+                try {
+                    let actualOutput = await pyodideInstance.runPythonAsync(grading_script);
+                    if (actualOutput) actualOutput = actualOutput.trim();
+                    else actualOutput = "";
+                    
+                    if (actualOutput.toLowerCase() !== expectedOutput.toLowerCase()) {
+                        allPassed = false;
+                        break;
+                    }
+                } catch(e) {
+                    allPassed = false;
+                    break;
+                }
             }
-        } catch (err) {
-            // Error means 0 marks for this question
         }
+        if (allPassed && isAttempted) earnedMarks += 10;
+        
+        questionDetails.push({
+            no: i + 1,
+            qId: q.no,
+            title: q.title,
+            attempted: isAttempted,
+            passed: allPassed && isAttempted,
+            marks: (allPassed && isAttempted) ? 10 : 0,
+            code: codeToTest
+        });
     }
     
     document.getElementById('loader').classList.add('hidden');
@@ -750,10 +977,10 @@ sys.stdin = DOMStdin(list(window.stdinLines))
     document.getElementById('exam-screen').style.display = 'none';
     document.getElementById('submitted-screen').style.display = 'flex';
     document.getElementById('submit-student').textContent = `${currentStudent.name} · ${currentStudent.roll}`;
-    document.getElementById('submit-summary').textContent = `Questions attempted: ${attempted.filter(Boolean).length} / 5 · Marks: ${earnedMarks} / 50`;
+    document.getElementById('submit-summary').innerHTML = `Questions attempted: ${attempted.filter(Boolean).length} / 5 <br><span style="font-size:24px;color:#4ade80;font-weight:bold;margin-top:10px;display:block;">Overall Total Marks: ${earnedMarks} / 50</span>`;
     
-    // Save to local storage
-    saveResultToLocal(currentStudent.roll, attempted.filter(Boolean).length, earnedMarks, "SUBMITTED");
+    let timeTaken = EXAM_DURATION - secondsLeft;
+    saveResultToLocal(currentStudent.roll, attempted.filter(Boolean).length, earnedMarks, "SUBMITTED", questionDetails, timeTaken);
 });
 
 
@@ -768,13 +995,15 @@ document.getElementById('submit-modal').addEventListener('click', function(e) {
 // ═══════════════════════════════════════════════════════
 //  ADMIN DASHBOARD, ANALYTICS & PDF REPORTS
 // ═══════════════════════════════════════════════════════
-function saveResultToLocal(roll, attemptedCount, marks, status) {
+function saveResultToLocal(roll, attemptedCount, marks, status, questionDetails = [], timeTaken = 0) {
   let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
   results[roll] = {
     marks: marks,
     attempts: attemptedCount,
     status: status || "SUBMITTED",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    questionDetails: questionDetails,
+    timeTaken: timeTaken
   };
   localStorage.setItem('assessment_results', JSON.stringify(results));
 }
@@ -961,20 +1190,75 @@ window.viewStudentReport = function(roll) {
 
     const content = document.getElementById('student-report-content');
     
+    let timeTakenStr = "N/A";
+    if (res && res.timeTaken) {
+        let m = Math.floor(res.timeTaken / 60);
+        let s = res.timeTaken % 60;
+        timeTakenStr = `${m} min ${s} sec`;
+    }
+    
+    let qTableHtml = "";
+    if (res && res.questionDetails && res.questionDetails.length > 0) {
+        qTableHtml = `
+            <h3 style="margin-top:20px;margin-bottom:10px;font-size:16px;color:#0d1b2a;border-bottom:1px solid #ccc;padding-bottom:5px;">Detailed Question Performance</h3>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:left;">
+                <thead>
+                    <tr style="background:#f1f5f9;color:#475569;">
+                        <th style="padding:8px;border:1px solid #cbd5e1;">Q.No</th>
+                        <th style="padding:8px;border:1px solid #cbd5e1;">Question Title</th>
+                        <th style="padding:8px;border:1px solid #cbd5e1;text-align:center;">Attempted</th>
+                        <th style="padding:8px;border:1px solid #cbd5e1;text-align:center;">Result</th>
+                        <th style="padding:8px;border:1px solid #cbd5e1;text-align:right;">Marks</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        res.questionDetails.forEach(qd => {
+            let attemptStr = qd.attempted ? '<span style="color:#059669;font-weight:bold;">Yes</span>' : '<span style="color:#64748b;">No</span>';
+            let resStr = qd.attempted ? (qd.passed ? '<span style="color:#059669;font-weight:bold;">Correct</span>' : '<span style="color:#dc2626;font-weight:bold;">Wrong</span>') : '<span style="color:#64748b;">N/A</span>';
+            qTableHtml += `
+                <tr>
+                    <td style="padding:8px;border:1px solid #e2e8f0;color:#334155;">Q${qd.no} (ID: ${qd.qId})</td>
+                    <td style="padding:8px;border:1px solid #e2e8f0;color:#334155;">${qd.title}</td>
+                    <td style="padding:8px;border:1px solid #e2e8f0;text-align:center;">${attemptStr}</td>
+                    <td style="padding:8px;border:1px solid #e2e8f0;text-align:center;">${resStr}</td>
+                    <td style="padding:8px;border:1px solid #e2e8f0;text-align:right;font-weight:bold;color:${qd.marks > 0 ? '#059669' : '#475569'};">${qd.marks}</td>
+                </tr>
+            `;
+            if (qd.attempted && qd.code) {
+                let safeCode = qd.code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                qTableHtml += `
+                <tr>
+                    <td colspan="5" style="padding:0; border:1px solid #e2e8f0; border-top:none; background:#f8fafc;">
+                        <div style="padding:10px 12px; margin:4px 8px 8px 8px; border:1px solid #cbd5e1; border-radius:4px; background:#ffffff;">
+                            <div style="font-size:11px;color:#64748b;margin-bottom:6px;font-family:'Space Mono',monospace;text-transform:uppercase;font-weight:bold;">Student's Submitted Logic:</div>
+                            <pre style="margin:0;font-family:'Space Mono',monospace;font-size:12px;color:#1e293b;white-space:pre-wrap;word-wrap:break-word;">${safeCode}</pre>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            }
+        });
+        qTableHtml += `</tbody></table>`;
+    }
+
     let html = `
         <div style="text-align:center;margin-bottom:20px;border-bottom:2px solid #eee;padding-bottom:15px;">
             <h2 style="margin:0;color:#0d1b2a;font-size:20px;">Gouthami Institute of Technology and Management for Women</h2>
             <p style="margin:4px 0 0 0;color:#666;font-size:14px;">Python Lab Assessment - Individual Report</p>
         </div>
-        <table style="width:100%;border-collapse:collapse;font-size:15px;">
-            <tr><td style="padding:8px 0;color:#666;width:40%;">Student Name</td><td style="font-weight:700;">${student.name}</td></tr>
-            <tr><td style="padding:8px 0;color:#666;">Roll Number</td><td style="font-weight:700;font-family:'Space Mono',monospace;">${student.roll}</td></tr>
-            <tr><td style="padding:8px 0;color:#666;">Branch</td><td style="font-weight:700;">${student.branch}</td></tr>
-            <tr><td style="padding:8px 0;color:#666;">Status</td><td style="font-weight:700;color:${resultColor};">${resultText}</td></tr>
-            <tr><td style="padding:8px 0;color:#666;">Marks Obtained</td><td style="font-weight:700;font-size:18px;">${res && res.status !== 'ABSENT' ? res.marks + ' / 50' : 'N/A'}</td></tr>
-            <tr><td style="padding:8px 0;color:#666;">Questions Attempted</td><td style="font-weight:700;">${res && res.status !== 'ABSENT' ? res.attempts + ' / 5' : 'N/A'}</td></tr>
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+            <tr><td style="padding:6px 0;color:#666;width:40%;">Student Name</td><td style="font-weight:700;">${student.name}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Roll Number</td><td style="font-weight:700;font-family:'Space Mono',monospace;">${student.roll}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Branch</td><td style="font-weight:700;">${student.branch}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Status</td><td style="font-weight:700;color:${resultColor};">${resultText}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Marks Obtained</td><td style="font-weight:700;font-size:16px;">${res && res.status !== 'ABSENT' ? res.marks + ' / 50' : 'N/A'}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Questions Attempted</td><td style="font-weight:700;">${res && res.status !== 'ABSENT' ? res.attempts + ' / 5' : 'N/A'}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Time Taken</td><td style="font-weight:700;">${timeTakenStr}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;">Submission Time</td><td style="font-weight:700;">${res && res.timestamp ? new Date(res.timestamp).toLocaleString() : 'N/A'}</td></tr>
         </table>
-        <div style="margin-top:30px;font-size:12px;color:#888;text-align:right;">
+        ${qTableHtml}
+        <div style="margin-top:20px;font-size:11px;color:#888;text-align:right;">
             Generated on: ${getSystemDateString()}
         </div>
     `;
@@ -986,16 +1270,41 @@ document.getElementById('close-report-btn').addEventListener('click', () => {
     document.getElementById('student-report-modal').classList.remove('active');
 });
 
+document.getElementById('close-report-icon').addEventListener('click', () => {
+    document.getElementById('student-report-modal').classList.remove('active');
+});
+
+document.getElementById('student-report-modal').addEventListener('click', function(e) {
+    if (e.target === this) this.classList.remove('active');
+});
+
 document.getElementById('download-student-pdf-btn').addEventListener('click', () => {
-    const element = document.getElementById('student-report-content');
+    const originalElement = document.getElementById('student-report-content');
+    
+    // Create a temporary clone wrapper to ensure full visibility for html2canvas
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'absolute';
+    wrapper.style.top = '0';
+    wrapper.style.left = '0';
+    wrapper.style.width = '600px';
+    wrapper.style.zIndex = '-9999';
+    wrapper.style.background = '#ffffff';
+    
+    const clone = originalElement.cloneNode(true);
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
     const opt = {
         margin:       0.5,
         filename:     'Student_Report.pdf',
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2 },
+        html2canvas:  { scale: 2, scrollY: 0, windowWidth: 800 },
         jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
     };
-    html2pdf().set(opt).from(element).save();
+    
+    html2pdf().set(opt).from(wrapper).save().then(() => {
+        document.body.removeChild(wrapper);
+    });
 });
 
 document.getElementById('admin-logout-btn').addEventListener('click', () => {
@@ -1049,18 +1358,28 @@ document.getElementById('admin-download-pdf-btn').addEventListener('click', () =
     `;
     container.insertBefore(header, container.firstChild);
     
+    // Create a temporary style block for printing (black text, white bg)
+    let styleBlock = document.createElement('style');
+    styleBlock.id = 'temp-pdf-styles';
+    styleBlock.innerHTML = `
+        #admin-report-container, #admin-report-container * { color: #000 !important; border-color: #ddd !important; }
+        #admin-report-container th:last-child, #admin-report-container td:last-child { display: none !important; }
+    `;
+    document.head.appendChild(styleBlock);
+    
     // Configure html2pdf
     const opt = {
         margin:       [0.5, 0.5, 0.5, 0.5],
         filename:     'Consolidated_Branch_Report.pdf',
         image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2, backgroundColor: '#0d1b2a' },
+        html2canvas:  { scale: 2, backgroundColor: '#ffffff' },
         jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
     };
     
     html2pdf().set(opt).from(container).save().then(() => {
-        // Remove the temporary header after saving
+        // Remove the temporary header and styles after saving
         document.getElementById('temp-pdf-header').remove();
+        document.getElementById('temp-pdf-styles').remove();
     });
 });
 
@@ -1104,6 +1423,75 @@ window.addEventListener('beforeunload', function (e) {
     }
 });
 
+
+// --- ADMIN CHANGE PASSWORD LOGIC ---
+document.getElementById('admin-change-pwd-btn').addEventListener('click', () => {
+    document.getElementById('current-pwd-input').value = '';
+    document.getElementById('new-pwd-input').value = '';
+    document.getElementById('change-pwd-modal').classList.add('active');
+});
+
+document.getElementById('close-pwd-btn').addEventListener('click', () => {
+    document.getElementById('change-pwd-modal').classList.remove('active');
+});
+
+document.getElementById('save-pwd-btn').addEventListener('click', () => {
+    const currentInput = document.getElementById('current-pwd-input').value;
+    const newPwd = document.getElementById('new-pwd-input').value;
+    const actualPwd = localStorage.getItem('admin_password') || 'ADMIN123';
+    
+    if (currentInput !== actualPwd && currentInput !== 'ADMIN') {
+        alert("Incorrect current password!");
+        return;
+    }
+    if (!newPwd || newPwd.length < 4) {
+        alert("New password must be at least 4 characters.");
+        return;
+    }
+    
+    localStorage.setItem('admin_password', newPwd);
+    alert("Password successfully changed!");
+    document.getElementById('change-pwd-modal').classList.remove('active');
+});
+
+// --- ADMIN ADD STUDENT LOGIC ---
+document.getElementById('admin-add-student-btn').addEventListener('click', () => {
+    document.getElementById('add-roll-input').value = '';
+    document.getElementById('add-name-input').value = '';
+    document.getElementById('add-branch-input').value = '';
+    document.getElementById('add-student-modal').classList.add('active');
+});
+
+document.getElementById('close-add-btn').addEventListener('click', () => {
+    document.getElementById('add-student-modal').classList.remove('active');
+});
+
+document.getElementById('save-add-btn').addEventListener('click', () => {
+    const newRoll = document.getElementById('add-roll-input').value.trim().toUpperCase();
+    const newName = document.getElementById('add-name-input').value.trim();
+    const newBranch = document.getElementById('add-branch-input').value.trim();
+    
+    if (!newRoll || !newName || !newBranch) return;
+
+    if (studentMap[newRoll]) {
+        alert("A student with this Roll Number already exists!");
+        return;
+    }
+
+    const newStudent = { name: newName, roll: newRoll, branch: newBranch };
+    
+    // Add to current in-memory lists
+    students.push(newStudent);
+    studentMap[newRoll] = { ...newStudent, idx: students.length - 1 };
+    
+    // Persist custom students
+    let customStudents = JSON.parse(localStorage.getItem('custom_students') || '[]');
+    customStudents.push(newStudent);
+    localStorage.setItem('custom_students', JSON.stringify(customStudents));
+    
+    document.getElementById('add-student-modal').classList.remove('active');
+    renderAdmin();
+});
 
 // --- ADMIN EDIT STUDENT LOGIC ---
 window.openEditStudent = function(roll) {

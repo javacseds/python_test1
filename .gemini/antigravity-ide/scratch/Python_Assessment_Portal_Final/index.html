@@ -25,15 +25,33 @@
     <div class="glow glow-blue"></div>
     <div class="glow glow-amber"></div>
     <div class="login-card">
+        <div class="login-tabs">
+            <button class="login-tab active" id="tab-student" onclick="switchLoginTab('student')">Student Login</button>
+            <button class="login-tab" id="tab-admin" onclick="switchLoginTab('admin')">Admin Login</button>
+        </div>
         <div class="login-college">Gouthami Institute of Technology and Management for Women</div>
         <div class="login-eyebrow">Python Lab Assessment</div>
-        <h1>Python Online Exam</h1>
-        <p class="login-subtitle">Dept. of CSE &nbsp;·&nbsp; Online Lab Examination<br>Enter your roll number to begin your exam.</p>
-        <label class="form-label" for="roll-input">Roll Number</label>
-        <input id="roll-input" class="login-input" type="text" placeholder="e.g. 238U1A0568" autocomplete="off" spellcheck="false" />
-        <button class="login-btn" id="login-btn">Start Exam →</button>
-        <div id="login-error">⚠ Roll number not found. Please check and try again.</div>
-        <p class="login-footer-note">5 Questions · 10 Marks Each · 50 Marks Total · 2 hrs 30 min</p>
+        
+        <!-- Student View -->
+        <div id="login-student-view">
+            <h1>Python Online Exam</h1>
+            <p class="login-subtitle">Dept. of CSE &nbsp;·&nbsp; Online Lab Examination<br>Enter your roll number to begin your exam.</p>
+            <label class="form-label" for="roll-input">Roll Number</label>
+            <input id="roll-input" class="login-input" type="text" placeholder="e.g. 238U1A0568" autocomplete="off" spellcheck="false" />
+            <button class="login-btn" id="login-btn">Start Exam →</button>
+            <div id="login-error">⚠ Roll number not found. Please check and try again.</div>
+            <p class="login-footer-note">5 Questions · 10 Marks Each · 50 Marks Total · 2 hrs 30 min</p>
+        </div>
+        
+        <!-- Admin View -->
+        <div id="login-admin-view" style="display:none;">
+            <h1>Administrator Portal</h1>
+            <p class="login-subtitle">Enter your admin password to access the dashboard and student records.</p>
+            <label class="form-label" for="admin-password-input">Admin Password</label>
+            <input id="admin-password-input" class="login-input" type="password" placeholder="••••••••" autocomplete="off" spellcheck="false" />
+            <button class="login-btn" id="admin-login-btn">Access Dashboard →</button>
+            <div id="admin-login-error" style="display:none; color: #ef4444; font-size: 13px; margin-top: 10px; font-weight: 600;">⚠ Incorrect Admin Password.</div>
+        </div>
     </div>
 </div>
 
@@ -138,9 +156,11 @@
         <div class="header-main-row" style="border-bottom:none;width:100%;">
             <span class="header-title" style="font-size:20px;color:var(--accent2);">Exam Administrator Dashboard</span>
             <div style="display:flex;gap:12px;">
+                <button id="admin-add-student-btn" class="run-btn" style="background:#10b981;">Add Student</button>
                 <button id="admin-clear-btn" class="clear-btn" style="border-color:var(--red);color:var(--red);">Clear All Data</button>
                 <button id="admin-download-btn" class="run-btn" style="background:var(--blue-light);">Download CSV</button>
                 <button id="admin-download-pdf-btn" class="run-btn" style="background:var(--accent);">Download PDF Report</button>
+                <button id="admin-change-pwd-btn" class="clear-btn" style="border-color:var(--yellow);color:var(--yellow);">Change Password</button>
                 <button id="admin-logout-btn" class="clear-btn">Logout</button>
             </div>
         </div>
@@ -175,7 +195,8 @@
 
 <!-- Student Report Modal -->
 <div class="modal-overlay" id="student-report-modal">
-    <div class="modal-card" style="max-width:600px;">
+    <div class="modal-card" style="max-width:600px; position:relative;">
+        <span id="close-report-icon" style="position:absolute;top:15px;right:20px;font-size:24px;color:#fff;cursor:pointer;line-height:1;transition:color 0.2s;" onmouseover="this.style.color='#f87171'" onmouseout="this.style.color='#fff'">&times;</span>
         <div id="student-report-content" style="padding:20px;background:#fff;color:#000;border-radius:8px;font-family:'DM Sans',sans-serif;">
             <!-- populated dynamically -->
         </div>
@@ -188,6 +209,29 @@
 
 <!-- Chart JS -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- Add Student Modal -->
+<div class="modal-overlay" id="add-student-modal">
+    <div class="modal-card" style="max-width:400px;">
+        <h3 style="margin-bottom:15px;color:var(--text);">Add New Student</h3>
+        <div style="margin-bottom:15px;text-align:left;">
+            <label style="display:block;margin-bottom:5px;font-size:12px;color:var(--muted);">Roll Number</label>
+            <input type="text" id="add-roll-input" placeholder="e.g. 238U1A0568" style="width:100%;padding:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:6px;font-family:'Space Mono',monospace;">
+        </div>
+        <div style="margin-bottom:15px;text-align:left;">
+            <label style="display:block;margin-bottom:5px;font-size:12px;color:var(--muted);">Student Name</label>
+            <input type="text" id="add-name-input" placeholder="Enter Full Name" style="width:100%;padding:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:6px;">
+        </div>
+        <div style="margin-bottom:20px;text-align:left;">
+            <label style="display:block;margin-bottom:5px;font-size:12px;color:var(--muted);">Branch</label>
+            <input type="text" id="add-branch-input" placeholder="e.g. B.Tech CSE" style="width:100%;padding:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:6px;">
+        </div>
+        <div class="modal-btns">
+            <button class="modal-cancel" id="close-add-btn">Cancel</button>
+            <button class="modal-confirm" id="save-add-btn" style="background:#10b981;color:#fff;">Add Student</button>
+        </div>
+    </div>
+</div>
 
 <!-- Edit Student Modal -->
 <div class="modal-overlay" id="edit-student-modal">
@@ -209,6 +253,25 @@
         <div class="modal-btns">
             <button class="modal-cancel" id="close-edit-btn">Cancel</button>
             <button class="modal-confirm" id="save-edit-btn" style="background:var(--blue-light);color:var(--navy);">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal-overlay" id="change-pwd-modal">
+    <div class="modal-card" style="max-width:400px;">
+        <h3 style="margin-bottom:15px;color:var(--text);">Change Admin Password</h3>
+        <div style="margin-bottom:15px;text-align:left;">
+            <label style="display:block;margin-bottom:5px;font-size:12px;color:var(--muted);">Current Password</label>
+            <input type="password" id="current-pwd-input" style="width:100%;padding:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:6px;">
+        </div>
+        <div style="margin-bottom:20px;text-align:left;">
+            <label style="display:block;margin-bottom:5px;font-size:12px;color:var(--muted);">New Password</label>
+            <input type="password" id="new-pwd-input" style="width:100%;padding:10px;background:var(--navy3);border:1px solid var(--border);color:var(--text);border-radius:6px;">
+        </div>
+        <div class="modal-btns">
+            <button class="modal-cancel" id="close-pwd-btn">Cancel</button>
+            <button class="modal-confirm" id="save-pwd-btn" style="background:var(--yellow);color:#000;">Change</button>
         </div>
     </div>
 </div>
