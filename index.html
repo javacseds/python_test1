@@ -203,6 +203,11 @@
             <!-- populated dynamically -->
         </div>
 
+        <!-- Search Bar -->
+        <div style="margin-bottom: 20px; display: flex; justify-content: flex-end;">
+            <input type="text" id="admin-search-input" placeholder="🔍 Search by name or roll number..." style="padding: 10px 16px; font-size: 13px; border-radius: 8px; border: 1px solid var(--border); background: rgba(255,255,255,0.05); color: #fff; width: 320px; outline: none; transition: border-color 0.2s;" onfocus="this.style.borderColor='var(--blue-light)'" onblur="this.style.borderColor='var(--border)'" />
+        </div>
+
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;">
             <table id="admin-table" style="width:100%;border-collapse:collapse;color:var(--text);font-size:14px;text-align:left;">
                 <thead>
