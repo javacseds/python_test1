@@ -313,6 +313,8 @@ document.getElementById('admin-login-btn').addEventListener('click', () => {
         loginScreen.style.display = 'none';
         document.getElementById('admin-screen').style.display = 'flex';
         renderAdmin();
+        if (window.adminInterval) clearInterval(window.adminInterval);
+        window.adminInterval = setInterval(renderAdmin, 15000);
     } else {
         document.getElementById('admin-login-error').style.display = 'block';
     }
@@ -331,6 +333,8 @@ function attemptLogin() {
     loginScreen.style.display = 'none';
     document.getElementById('admin-screen').style.display = 'flex';
     renderAdmin();
+    if (window.adminInterval) clearInterval(window.adminInterval);
+    window.adminInterval = setInterval(renderAdmin, 15000);
     return;
   }
   const student = studentMap[roll];
@@ -361,6 +365,39 @@ rollInput.addEventListener('keydown', e => { if (e.key === 'Enter') attemptLogin
 // ═══════════════════════════════════════════════════════
 //  START EXAM
 // ═══════════════════════════════════════════════════════
+let lastActivityTime = Date.now();
+
+document.getElementById('exam-screen').addEventListener('mousemove', () => { lastActivityTime = Date.now(); });
+document.getElementById('exam-screen').addEventListener('keydown', () => { lastActivityTime = Date.now(); });
+
+async function syncStudentHeartbeat() {
+    if (!currentStudent) return;
+    const now = Date.now();
+    const isIdle = (now - lastActivityTime) > 120000;
+    const currentStatus = isIdle ? "IDLE" : "ACTIVE";
+    
+    let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
+    if (results[currentStudent.roll] && results[currentStudent.roll].status === "SUBMITTED") {
+        if (window.heartbeatInterval) clearInterval(window.heartbeatInterval);
+        return;
+    }
+
+    const payload = {
+        status: currentStatus,
+        lastActiveStr: new Date(lastActivityTime).toISOString(),
+        lastSyncStr: new Date().toISOString()
+    };
+    
+    if (!results[currentStudent.roll]) results[currentStudent.roll] = {};
+    results[currentStudent.roll] = { ...results[currentStudent.roll], ...payload };
+    localStorage.setItem('assessment_results', JSON.stringify(results));
+    
+    if (window.firebaseDb && window.firebaseSetDoc) {
+        try {
+            await window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", currentStudent.roll), payload, { merge: true });
+        } catch(e) { console.error("Heartbeat sync failed", e); }
+    }
+}
 function startExam(student) {
   currentStudent = student;
   assignedQIdxs = getStudentQuestions(student.idx);
@@ -380,6 +417,12 @@ function startExam(student) {
   window.scrollTo(0, 0);
 
   startTimer();
+  updateProgress();
+
+  lastActivityTime = Date.now();
+  if (window.heartbeatInterval) clearInterval(window.heartbeatInterval);
+  window.heartbeatInterval = setInterval(syncStudentHeartbeat, 15000);
+  syncStudentHeartbeat();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -641,7 +684,17 @@ function saveCurrent() {
 function updateProgress() {
   const att = attempted.filter(Boolean).length;
   const pCount = passed.filter(Boolean).length;
-  document.getElementById('progress-info').textContent = `${att} / 5 attempted · Marks: ${pCount * 10} / 50`;
+  const marks = pCount * 10;
+  document.getElementById('progress-info').textContent = `${att} / 5 attempted · Marks: ${marks} / 50`;
+  
+  const submitBtn = document.getElementById('open-submit-modal-btn');
+  if (marks >= 30) {
+      submitBtn.classList.remove('locked');
+      submitBtn.title = "";
+  } else {
+      submitBtn.classList.add('locked');
+      submitBtn.title = "active only after reach min 30 marks";
+  }
 }
 
 
@@ -888,6 +941,8 @@ document.getElementById('copy-btn').addEventListener('click', () => {
 
 document.getElementById('open-submit-modal-btn').addEventListener('click', () => {
     saveCurrent();
+    const pCount = passed.filter(Boolean).length;
+    if (pCount * 10 < 30) return; // Locked until 30 marks
     const att = attempted.filter(Boolean).length;
     document.getElementById('modal-attempt-info').textContent =
       `${att} of 5 questions attempted · Estimated marks: ${att * 10} / 50`;
@@ -1007,12 +1062,12 @@ async function saveResultToLocal(roll, attemptedCount, marks, status, questionDe
   };
 
   let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
-  results[roll] = resultData;
+  results[roll] = { ...(results[roll] || {}), ...resultData };
   localStorage.setItem('assessment_results', JSON.stringify(results));
 
   if (window.firebaseDb && window.firebaseSetDoc) {
      try {
-         await window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", roll), resultData);
+         await window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", roll), resultData, { merge: true });
          console.log("Successfully synced to Firebase!");
      } catch(e) {
          console.error("Failed to sync to Firebase", e);
@@ -1160,8 +1215,10 @@ async function renderAdmin() {
   
   sortedStudents.forEach((s, i) => {
     const res = results[s.roll];
-    const isSub = !!res;
+    const isSub = res && res.status === 'SUBMITTED';
     const isAbs = res && res.status === 'ABSENT';
+    const isActive = res && res.status === 'ACTIVE';
+    const isIdle = res && res.status === 'IDLE';
     
     const tr = document.createElement('tr');
     tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
@@ -1169,7 +1226,7 @@ async function renderAdmin() {
     tr.onmouseover = () => tr.style.background = 'rgba(255,255,255,0.02)';
     tr.onmouseout = () => tr.style.background = 'transparent';
     
-    let statusBadge = `<span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.04em;background:rgba(245,158,11,0.15);color:#fbbf24;">PENDING</span>`;
+    let statusBadge = `<span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.04em;background:rgba(255,255,255,0.1);color:#94a3b8;">PENDING</span>`;
     if (isAbs) {
         statusBadge = `<span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.04em;background:rgba(139,92,246,0.15);color:#a78bfa;">ABSENT</span>`;
     } else if (isSub) {
@@ -1180,6 +1237,10 @@ async function renderAdmin() {
         } else {
             statusBadge = `<span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.04em;background:rgba(239,68,68,0.15);color:#fca5a5;">FAIL</span>`;
         }
+    } else if (isActive) {
+        statusBadge = `<span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.04em;background:rgba(59,130,246,0.15);color:#60a5fa;box-shadow: 0 0 8px rgba(59,130,246,0.4);">ACTIVE</span>`;
+    } else if (isIdle) {
+        statusBadge = `<span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.04em;background:rgba(249,115,22,0.15);color:#fb923c;">IDLE</span>`;
     }
 
     tr.innerHTML = `
@@ -1325,6 +1386,7 @@ document.getElementById('admin-logout-btn').addEventListener('click', () => {
   document.getElementById('admin-screen').style.display = 'none';
   loginScreen.style.display = 'flex';
   rollInput.value = '';
+  if (window.adminInterval) clearInterval(window.adminInterval);
 });
 
 document.getElementById('admin-clear-btn').addEventListener('click', () => {
