@@ -415,6 +415,12 @@ function startExam(student) {
   loginScreen.style.display    = 'none';
   examScreen.style.display     = 'flex';
   window.scrollTo(0, 0);
+  
+  if (document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(err => {
+          console.warn(`Fullscreen error: ${err.message}`);
+      });
+  }
 
   startTimer();
   updateProgress();
@@ -1489,6 +1495,12 @@ document.addEventListener('visibilitychange', () => {
         } else {
             alert(`WARNING: Do not switch tabs or windows! Strike ${tabSwitches} of 3.\nIf you reach 3 strikes, your exam will automatically submit!`);
         }
+    }
+});
+
+document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && document.getElementById('exam-screen').style.display === 'flex') {
+        alert("WARNING: Exiting full-screen mode is not allowed during the exam! Please return to full-screen mode.");
     }
 });
 
