@@ -214,9 +214,59 @@ const students = [
   { name: "Pending Name (238U1A0440)", roll: "238U1A0440", branch: "B.Tech" }
 ];
 
-// ═══════════════════════════════════════════════════════
-//  SEEDED RANDOM: assign 5 unique questions per student
-// ═══════════════════════════════════════════════════════
+// Helper function to compare execution output and expected output robustly
+function compareOutput(actual, expected) {
+  if (typeof actual !== 'string' || typeof expected !== 'string') return false;
+  
+  const clean = (str) => {
+    return str
+      .toLowerCase()
+      // Replace colons, equal signs, and commas with space
+      .replace(/[:=,]/g, ' ')
+      // Normalize all white spaces (including newlines and tabs) to a single space
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  const normActual = clean(actual);
+  const normExpected = clean(expected);
+  
+  if (normActual === normExpected) return true;
+
+  // Fallback: Line-by-line clean comparison
+  const actualLines = actual.split('\n').map(l => clean(l)).filter(Boolean);
+  const expectedLines = expected.split('\n').map(l => clean(l)).filter(Boolean);
+  if (actualLines.length === expectedLines.length) {
+    let allMatch = true;
+    for (let i = 0; i < expectedLines.length; i++) {
+      if (actualLines[i] !== expectedLines[i]) {
+        allMatch = false;
+        break;
+      }
+    }
+    if (allMatch) return true;
+  }
+
+  // Token-based fallback (ignores punctuation, case, and extra words, compares word/number sequence)
+  const getTokens = (str) => {
+    return str.toLowerCase().match(/[a-z0-9\-]+/g) || [];
+  };
+  const actualTokens = getTokens(actual);
+  const expectedTokens = getTokens(expected);
+  if (actualTokens.length > 0 && actualTokens.length === expectedTokens.length) {
+    let allTokensMatch = true;
+    for (let i = 0; i < expectedTokens.length; i++) {
+      if (actualTokens[i] !== expectedTokens[i]) {
+        allTokensMatch = false;
+        break;
+      }
+    }
+    if (allTokensMatch) return true;
+  }
+
+  return false;
+}
+
 function seededShuffle(arr, seed) {
   const a = arr.slice();
   let s = seed >>> 0;
@@ -757,7 +807,7 @@ _grade_run()
                     if (actualOutput) actualOutput = actualOutput.trim();
                     else actualOutput = "";
                     
-                    if (actualOutput.toLowerCase() !== expectedOutput.toLowerCase()) {
+                    if (!compareOutput(actualOutput, expectedOutput)) {
                         allPassed = false;
                         break;
                     }
@@ -1005,7 +1055,7 @@ _grade_run()
                 if (actualOutput) actualOutput = actualOutput.trim();
                 else actualOutput = "";
                 
-                if (actualOutput.toLowerCase() !== expectedOutput.toLowerCase()) {
+                if (!compareOutput(actualOutput, expectedOutput)) {
                     allPassed = false;
                     break;
                 }
@@ -1126,7 +1176,7 @@ _grade_run()
                     if (actualOutput) actualOutput = actualOutput.trim();
                     else actualOutput = "";
                     
-                    if (actualOutput.toLowerCase() !== expectedOutput.toLowerCase()) {
+                    if (!compareOutput(actualOutput, expectedOutput)) {
                         allPassed = false;
                         break;
                     }
