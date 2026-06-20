@@ -951,12 +951,12 @@ function updateProgress() {
   document.getElementById('progress-info').textContent = `${att} / 5 attempted · Marks: ${marks} / 50`;
   
   const submitBtn = document.getElementById('open-submit-modal-btn');
-  if (marks >= 30) {
+  if (marks >= 20) {
       submitBtn.classList.remove('locked');
       submitBtn.title = "";
   } else {
       submitBtn.classList.add('locked');
-      submitBtn.title = "active only after reach min 30 marks";
+      submitBtn.title = "active only after reach min 20 marks";
   }
 }
 
@@ -1246,7 +1246,7 @@ document.getElementById('copy-btn').addEventListener('click', () => {
 document.getElementById('open-submit-modal-btn').addEventListener('click', () => {
     saveCurrent();
     const pCount = passed.filter(Boolean).length;
-    if (pCount * 10 < 30) return; // Locked until 30 marks
+    if (pCount * 10 < 20) return; // Locked until 20 marks
     const att = attempted.filter(Boolean).length;
     document.getElementById('modal-attempt-info').textContent =
       `${att} of 5 questions attempted · Estimated marks: ${att * 10} / 50`;
