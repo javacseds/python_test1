@@ -398,7 +398,7 @@ document.getElementById('admin-login-btn').addEventListener('click', () => {
         document.getElementById('admin-screen').style.display = 'flex';
         renderAdmin();
         if (window.adminInterval) clearInterval(window.adminInterval);
-        window.adminInterval = setInterval(renderAdmin, 15000);
+        window.adminInterval = setInterval(renderAdmin, 2000);
     } else {
         document.getElementById('admin-login-error').style.display = 'block';
     }
@@ -418,7 +418,7 @@ function attemptLogin() {
     document.getElementById('admin-screen').style.display = 'flex';
     renderAdmin();
     if (window.adminInterval) clearInterval(window.adminInterval);
-    window.adminInterval = setInterval(renderAdmin, 15000);
+    window.adminInterval = setInterval(renderAdmin, 2000);
     return;
   }
   const student = studentMap[roll];
@@ -572,6 +572,20 @@ function startExam(student) {
   passed = [false, false, false, false, false];
   currentTab = 0;
 
+  // Restore previous progress if it exists in local storage
+  let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
+  if (results[student.roll]) {
+      const res = results[student.roll];
+      if (res.questionDetails && res.questionDetails.length > 0) {
+          res.questionDetails.forEach((qd, idx) => {
+              codes[idx] = qd.code || '';
+              stdins[idx] = qd.stdin || '';
+              attempted[idx] = qd.attempted || false;
+              passed[idx] = qd.passed || false;
+          });
+      }
+  }
+
   document.getElementById('header-student').textContent = `${student.name} · ${student.roll}`;
 
   buildNavTabs();
@@ -592,7 +606,7 @@ function startExam(student) {
 
   lastActivityTime = Date.now();
   if (window.heartbeatInterval) clearInterval(window.heartbeatInterval);
-  window.heartbeatInterval = setInterval(syncStudentHeartbeat, 15000);
+  window.heartbeatInterval = setInterval(syncStudentHeartbeat, 2000);
   syncStudentHeartbeat();
 }
 
@@ -617,6 +631,7 @@ function switchTab(i) {
   // save current code/stdin
   if (typeof editor !== 'undefined') { codes[currentTab] = editor.getValue(); } else { codes[currentTab] = ''; }
   stdins[currentTab] = document.getElementById('stdin-input').value;
+  autoSaveProgress();
 
   // update tab state
   document.getElementById(`tab-${currentTab}`).classList.remove('active');
@@ -852,6 +867,73 @@ function saveCurrent() {
   updateProgress();
 }
 
+let autoSaveTimeout = null;
+
+function autoSaveProgress() {
+  if (!currentStudent) return;
+
+  // Save current editor state to memory
+  if (typeof editor !== 'undefined') { codes[currentTab] = editor.getValue(); }
+  const stdinEl = document.getElementById('stdin-input');
+  stdins[currentTab] = stdinEl ? stdinEl.value : '';
+
+  // Calculate current marks and question details
+  let earnedMarks = 0;
+  let questionDetails = [];
+  for (let i = 0; i < 5; i++) {
+    let codeToTest = codes[i];
+    let isAttempted = codeToTest.trim().length > 0;
+    let qIdx = assignedQIdxs[i];
+    let q = questions[qIdx];
+    let isPassed = passed[i];
+    
+    if (isPassed && isAttempted) earnedMarks += 10;
+    
+    questionDetails.push({
+      no: i + 1,
+      qId: q.no,
+      title: q.title,
+      attempted: isAttempted,
+      passed: isPassed && isAttempted,
+      marks: (isPassed && isAttempted) ? 10 : 0,
+      code: codeToTest,
+      stdin: stdins[i]
+    });
+  }
+
+  let timeTaken = EXAM_DURATION - secondsLeft;
+
+  let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
+  // Avoid overwriting a submitted exam
+  if (results[currentStudent.roll] && results[currentStudent.roll].status === "SUBMITTED") {
+    return;
+  }
+
+  results[currentStudent.roll] = {
+    ...(results[currentStudent.roll] || {}),
+    marks: earnedMarks,
+    attempts: attempted.filter(Boolean).length,
+    status: (results[currentStudent.roll] && results[currentStudent.roll].status) || "ACTIVE",
+    timestamp: new Date().toISOString(),
+    questionDetails: questionDetails,
+    timeTaken: timeTaken
+  };
+
+  localStorage.setItem('assessment_results', JSON.stringify(results));
+
+  if (window.firebaseDb && window.firebaseSetDoc) {
+    window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", currentStudent.roll), results[currentStudent.roll], { merge: true })
+      .catch(e => console.error("Firebase auto-save failed", e));
+  }
+}
+
+function triggerAutoSave() {
+  if (autoSaveTimeout) clearTimeout(autoSaveTimeout);
+  autoSaveTimeout = setTimeout(() => {
+    autoSaveProgress();
+  }, 2000);
+}
+
 function updateProgress() {
   const att = attempted.filter(Boolean).length;
   const pCount = passed.filter(Boolean).length;
@@ -911,6 +993,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             attempted[currentTab] = false;
         }
         updateProgress();
+        triggerAutoSave();
     });
 
     // 2. Load Pyodide
@@ -1285,7 +1368,9 @@ async function renderAdmin(skipFirebaseFetch = false) {
   
   if (!skipFirebaseFetch && window.firebaseDb && window.firebaseGetDocs) {
       try {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted);">Loading live results from Firebase...</td></tr>';
+          if (!tbody.innerHTML || tbody.innerHTML.trim() === '') {
+              tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted);">Loading live results from Firebase...</td></tr>';
+          }
           const querySnapshot = await window.firebaseGetDocs(window.firebaseCollection(window.firebaseDb, "results"));
           querySnapshot.forEach((doc) => {
               results[doc.id] = doc.data();
