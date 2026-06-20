@@ -229,12 +229,46 @@ function seededShuffle(arr, seed) {
 }
 
 function getStudentQuestions(studentIdx) {
-  // Changed magic numbers to completely reshuffle questions for all students
-  const seed = (0xCAFEBABE ^ (studentIdx * 8191 + 54321)) >>> 0;
-  const allIdxs = [...Array(25).keys()];
-  const shuffled = seededShuffle(allIdxs, seed);
-  return shuffled.slice(0, 5); // 5 unique question indices
+  // Build a unique-set registry (runs once, cached for the session)
+  if (!window._questionRegistry) {
+    window._questionRegistry = {};
+    const totalStudents = students.length;
+    
+    // Pre-assign unique question sets for ALL students at once
+    const usedSets = new Set();
+    
+    for (let idx = 0; idx < totalStudents; idx++) {
+      let attempt = 0;
+      let chosen;
+      
+      while (true) {
+        // Generate a seed unique to this student + attempt
+        const seed = (0xCAFEBABE ^ ((idx + attempt * 997) * 8191 + 54321)) >>> 0;
+        const allIdxs = [...Array(questions.length).keys()];
+        const shuffled = seededShuffle(allIdxs, seed);
+        chosen = shuffled.slice(0, 5);
+        
+        // Create a sorted key to detect duplicate sets (order doesn't matter for uniqueness)
+        const key = chosen.slice().sort((a, b) => a - b).join(',');
+        
+        if (!usedSets.has(key)) {
+          usedSets.add(key);
+          break;
+        }
+        attempt++;
+        // Safety: with C(25,5) = 53130 combinations, this will always find a unique set
+        if (attempt > 10000) break;
+      }
+      
+      window._questionRegistry[idx] = chosen;
+    }
+    
+    console.log(`✅ Assigned unique question sets to ${totalStudents} students (${usedSets.size} unique sets)`);
+  }
+  
+  return window._questionRegistry[studentIdx] || [0, 1, 2, 3, 4];
 }
+
 
 // ═══════════════════════════════════════════════════════
 //  STATE
