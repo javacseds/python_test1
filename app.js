@@ -215,7 +215,7 @@ const students = [
 ];
 
 // Helper function to compare execution output and expected output robustly
-function compareOutput(actual, expected) {
+function compareOutput(actual, expected, qTitle = "") {
   if (typeof actual !== 'string' || typeof expected !== 'string') return false;
   
   const clean = (str) => {
@@ -232,6 +232,15 @@ function compareOutput(actual, expected) {
   const normExpected = clean(expected);
   
   if (normActual === normExpected) return true;
+
+  // Lenient fallback for character/string manipulation questions (like Toggle Case)
+  // If the student correctly swapped all letters but dropped digits/special characters
+  if (qTitle && (qTitle.toLowerCase().includes("toggle") || qTitle.toLowerCase().includes("uppercase") || qTitle.toLowerCase().includes("lowercase"))) {
+      const lettersOnly = (str) => str.replace(/[^a-zA-Z]/g, '');
+      if (lettersOnly(actual) === lettersOnly(expected) && lettersOnly(actual).length > 0) {
+          return true;
+      }
+  }
 
   // Fallback: Line-by-line clean comparison
   const actualLines = actual.split('\n').map(l => clean(l)).filter(Boolean);
@@ -799,8 +808,9 @@ async function triggerTimeout() {
                 let expectedOutput = s.output.trim();
                 window.grading_stdin = sampleInput.split('\n');
                 let grading_script = `
-import sys, io
+import sys, io, builtins
 from js import window
+builtins._stdin_tokens = []
 def _grade_run():
     old_stdout = sys.stdout
     old_stdin = sys.stdin
@@ -822,7 +832,7 @@ _grade_run()
                     if (actualOutput) actualOutput = actualOutput.trim();
                     else actualOutput = "";
                     
-                    if (!compareOutput(actualOutput, expectedOutput)) {
+                    if (!compareOutput(actualOutput, expectedOutput, q.title)) {
                         allPassed = false;
                         break;
                     }
@@ -971,6 +981,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         indentWithTabs: false,
         dragDrop: false
     });
+    window.editor = editor;
 
 
     editor.on('change', () => {
@@ -1009,6 +1020,43 @@ document.addEventListener("DOMContentLoaded", async () => {
             stdout: (text) => { appendToConsole(text, false); },
             stderr: (text) => { appendToConsole(text, true); }
         });
+        
+        // Setup robust input override
+        await pyodideInstance.runPythonAsync(`
+import builtins
+import re
+from js import window
+
+_stdin_tokens = []
+_original_input = builtins.input
+
+def smart_input(*args, **kwargs):
+    global _stdin_tokens
+    if _stdin_tokens:
+        return _stdin_tokens.pop(0)
+    
+    try:
+        line = _original_input(*args, **kwargs)
+    except Exception:
+        return ""
+        
+    code = window.grading_code if hasattr(window, 'grading_code') and window.grading_code else ''
+    if not code:
+        code = window.editor.getValue() if hasattr(window, 'editor') and window.editor else ''
+        
+    has_split = 'split' in code
+    
+    if not has_split and re.match(r'^\\s*[-+]?\\d+(?:\\s+[-+]?\\d+)*\\s*$', line):
+        tokens = line.split()
+        if tokens:
+            _stdin_tokens = tokens[1:]
+            return tokens[0]
+            
+    return line
+
+builtins.input = smart_input
+        `);
+        
         document.getElementById('loader').classList.add('hidden');
     } catch (err) {
         alert("Failed to load Secure Python Environment: " + err.message);
@@ -1077,6 +1125,7 @@ document.getElementById('run-btn').addEventListener('click', async () => {
         await pyodideInstance.runPythonAsync(`
 import sys, io
 from js import window
+builtins._stdin_tokens = []
 sys.stdin = io.StringIO("\\n".join(list(window.stdinLines)) + "\\n")
         `);
         await pyodideInstance.runPythonAsync(code);
@@ -1115,8 +1164,9 @@ sys.stdin = io.StringIO("\\n".join(list(window.stdinLines)) + "\\n")
             let expectedOutput = s.output.trim();
             window.grading_stdin = sampleInput.split('\n');
             let grading_script = `
-import sys, io
+import sys, io, builtins
 from js import window
+builtins._stdin_tokens = []
 def _grade_run():
     old_stdout = sys.stdout
     old_stdin = sys.stdin
@@ -1138,7 +1188,7 @@ _grade_run()
                 if (actualOutput) actualOutput = actualOutput.trim();
                 else actualOutput = "";
                 
-                if (!compareOutput(actualOutput, expectedOutput)) {
+                if (!compareOutput(actualOutput, expectedOutput, q.title)) {
                     allPassed = false;
                     break;
                 }
@@ -1236,8 +1286,9 @@ document.getElementById('confirm-submit-btn').addEventListener('click', async ()
                 let expectedOutput = s.output.trim();
                 window.grading_stdin = sampleInput.split('\n');
                 let grading_script = `
-import sys, io
+import sys, io, builtins
 from js import window
+builtins._stdin_tokens = []
 def _grade_run():
     old_stdout = sys.stdout
     old_stdin = sys.stdin
@@ -1259,7 +1310,7 @@ _grade_run()
                     if (actualOutput) actualOutput = actualOutput.trim();
                     else actualOutput = "";
                     
-                    if (!compareOutput(actualOutput, expectedOutput)) {
+                    if (!compareOutput(actualOutput, expectedOutput, q.title)) {
                         allPassed = false;
                         break;
                     }
