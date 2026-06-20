@@ -340,6 +340,15 @@ function attemptLogin() {
   const student = studentMap[roll];
   if (!student) { loginError.textContent = "⚠ Roll number not found."; loginError.style.display = 'block'; rollInput.focus(); return; }
   
+  // Check if Exam is open
+  const globalConfig = JSON.parse(localStorage.getItem('admin_config') || '{"examOpen":true}');
+  if (!globalConfig.examOpen) {
+      loginError.textContent = "⚠ The exam has not started yet or is currently closed.";
+      loginError.style.display = 'block';
+      rollInput.focus();
+      return;
+  }
+
   let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
   if (results[roll] && results[roll].status === "ABSENT") {
       loginError.textContent = "⚠ Exam has been deactivated for this student (Marked Absent).";
@@ -355,8 +364,80 @@ function attemptLogin() {
   }
 
   loginError.style.display = 'none';
-  startExam(student);
+
+  // Check Auth Mode
+  const authModes = JSON.parse(localStorage.getItem('student_auth_modes') || '{}');
+  const requiresOtp = authModes[roll] === 'OTP';
+  
+  if (requiresOtp) {
+      document.getElementById('otp-email-step').style.display = 'block';
+      document.getElementById('otp-code-step').style.display = 'none';
+      document.getElementById('student-email-input').value = '';
+      document.getElementById('student-otp-input').value = '';
+      document.getElementById('otp-error').style.display = 'none';
+      document.getElementById('otp-modal').classList.add('active');
+      window.pendingStudentLogin = student;
+  } else {
+      startExam(student);
+  }
 }
+
+document.getElementById('send-otp-btn').addEventListener('click', async () => {
+    const email = document.getElementById('student-email-input').value;
+    const student = window.pendingStudentLogin;
+    if (!email || !email.includes('@')) {
+        document.getElementById('otp-error').textContent = 'Please enter a valid email.';
+        document.getElementById('otp-error').style.display = 'block';
+        return;
+    }
+    
+    document.getElementById('send-otp-btn').textContent = 'Sending...';
+    try {
+        const res = await fetch('http://localhost:3000/send-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roll: student.roll, email })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('otp-error').style.display = 'none';
+            document.getElementById('otp-email-step').style.display = 'none';
+            document.getElementById('otp-code-step').style.display = 'block';
+        } else {
+            throw new Error(data.error || 'Failed');
+        }
+    } catch(e) {
+        document.getElementById('otp-error').textContent = e.message || "Failed to connect to server";
+        document.getElementById('otp-error').style.display = 'block';
+    }
+    document.getElementById('send-otp-btn').textContent = 'Send Code';
+});
+
+document.getElementById('verify-otp-btn').addEventListener('click', async () => {
+    const code = document.getElementById('student-otp-input').value;
+    const student = window.pendingStudentLogin;
+    if (!code) return;
+    
+    document.getElementById('verify-otp-btn').textContent = 'Verifying...';
+    try {
+        const res = await fetch('http://localhost:3000/verify-otp', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roll: student.roll, code })
+        });
+        const data = await res.json();
+        if (data.success) {
+            document.getElementById('otp-modal').classList.remove('active');
+            startExam(student);
+        } else {
+            throw new Error(data.error || 'Failed');
+        }
+    } catch(e) {
+        document.getElementById('otp-error').textContent = e.message || "Failed to connect to server";
+        document.getElementById('otp-error').style.display = 'block';
+    }
+    document.getElementById('verify-otp-btn').textContent = 'Verify & Start Exam';
+});
 
 
 document.getElementById('login-btn').addEventListener('click', attemptLogin);
@@ -1100,6 +1181,19 @@ window.allowRetest = function(roll) {
 let chartInstance1 = null;
 let chartInstance2 = null;
 
+window.updateAuthMode = function(roll, mode) {
+    let authModes = JSON.parse(localStorage.getItem('student_auth_modes') || '{}');
+    authModes[roll] = mode;
+    localStorage.setItem('student_auth_modes', JSON.stringify(authModes));
+};
+
+document.getElementById('toggle-exam-btn').addEventListener('click', () => {
+    let config = JSON.parse(localStorage.getItem('admin_config') || '{"examOpen":true}');
+    config.examOpen = !config.examOpen;
+    localStorage.setItem('admin_config', JSON.stringify(config));
+    renderAdmin();
+});
+
 async function renderAdmin() {
   const tbody = document.getElementById('admin-tbody');
   tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted);">Loading live results from Firebase...</td></tr>';
@@ -1118,6 +1212,21 @@ async function renderAdmin() {
       }
   }
   tbody.innerHTML = '';
+
+  const globalConfig = JSON.parse(localStorage.getItem('admin_config') || '{"examOpen":true}');
+  const examInd = document.getElementById('exam-status-indicator');
+  const examBtn = document.getElementById('toggle-exam-btn');
+  if (globalConfig.examOpen) {
+      examInd.textContent = "EXAM OPEN";
+      examInd.style.background = "rgba(16,185,129,0.15)";
+      examInd.style.color = "#34d399";
+      examBtn.textContent = "Close Exam";
+  } else {
+      examInd.textContent = "EXAM CLOSED";
+      examInd.style.background = "rgba(239,68,68,0.15)";
+      examInd.style.color = "#fca5a5";
+      examBtn.textContent = "Open Exam";
+  }
   
   // 1. Calculate Analytics
   let branchStats = {};
@@ -1249,11 +1358,20 @@ async function renderAdmin() {
         statusBadge = `<span style="display:inline-block;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.04em;background:rgba(249,115,22,0.15);color:#fb923c;">IDLE</span>`;
     }
 
+    const authModes = JSON.parse(localStorage.getItem('student_auth_modes') || '{}');
+    const authVal = authModes[s.roll] || 'DIRECT';
+    
     tr.innerHTML = `
       <td style="padding:14px 20px;color:var(--muted2);">${i + 1}</td>
       <td style="padding:14px 20px;font-family:'Space Mono',monospace;color:var(--text);">${s.roll}</td>
       <td style="padding:14px 20px;color:var(--text);">${s.name}</td>
       <td style="padding:14px 20px;color:var(--muted);">${s.branch}</td>
+      <td style="padding:14px 20px;">
+        <select onchange="updateAuthMode('${s.roll}', this.value)" style="background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:4px;padding:4px;font-size:11px;outline:none;">
+           <option value="DIRECT" ${authVal !== 'OTP' ? 'selected' : ''}>Direct</option>
+           <option value="OTP" ${authVal === 'OTP' ? 'selected' : ''}>Email OTP</option>
+        </select>
+      </td>
       <td style="padding:14px 20px;">${statusBadge}</td>
       <td style="padding:14px 20px;font-family:'Space Mono',monospace;font-weight:700;color:${isSub && !isAbs ? 'var(--text)' : 'var(--muted2)'};">
         ${isSub && !isAbs ? res.marks + ' / 50' : '-'}
@@ -1261,7 +1379,8 @@ async function renderAdmin() {
       <td style="padding:14px 20px; white-space:nowrap;">
         ${!isSub ? `<button class="clear-btn" style="padding:4px 8px;font-size:11px;border-color:var(--red);color:var(--red);margin-right:4px;" onclick="markAbsent('${s.roll}')">Absent</button>` : ''}
         ${isSub ? `<button class="clear-btn" style="padding:4px 8px;font-size:11px;border-color:var(--yellow);color:var(--yellow);margin-right:4px;" onclick="allowRetest('${s.roll}')">Retest</button>` : ''}
-        ${isSub && !isAbs ? `<button class="clear-btn" style="padding:4px 8px;font-size:11px;border-color:var(--blue-light);color:var(--blue-light);" onclick="viewStudentReport('${s.roll}')">Report</button>` : ''}
+        ${isSub && !isAbs ? `<button class="clear-btn" style="padding:4px 8px;font-size:11px;border-color:var(--blue-light);color:var(--blue-light);margin-right:4px;" onclick="viewStudentReport('${s.roll}')">Report</button>` : ''}
+        ${isSub && !isAbs ? `<button class="clear-btn" style="padding:4px 8px;font-size:11px;border-color:#10b981;color:#10b981;margin-right:4px;" onclick="emailStudentReport('${s.roll}')">Email PDF</button>` : ''}
         <button class="clear-btn" style="padding:4px 8px;font-size:11px;border-color:var(--muted);color:var(--muted);margin-left:4px;" onclick="openEditStudent('${s.roll}')">Edit</button>
       </td>
     `;
@@ -1458,12 +1577,92 @@ document.getElementById('admin-download-pdf-btn').addEventListener('click', () =
         jsPDF:        { unit: 'in', format: 'letter', orientation: 'landscape' }
     };
     
-    html2pdf().set(opt).from(container).save().then(() => {
+    html2pdf().set(opt).from(container).outputPdf('datauristring').then(async (pdfBase64) => {
         // Remove the temporary header and styles after saving
         document.getElementById('temp-pdf-header').remove();
         document.getElementById('temp-pdf-styles').remove();
+        
+        // Save locally
+        const link = document.createElement('a');
+        link.href = pdfBase64;
+        link.download = 'Consolidated_Branch_Report.pdf';
+        link.click();
+        
+        // Send email
+        try {
+            document.getElementById('admin-download-pdf-btn').textContent = 'Sending Email...';
+            await fetch('http://localhost:3000/send-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    toEmail: 'javacsedscs@gmail.com',
+                    pdfBase64: pdfBase64,
+                    filename: 'Consolidated_Branch_Report.pdf',
+                    isConsolidated: true
+                })
+            });
+            document.getElementById('admin-download-pdf-btn').textContent = 'Download PDF Report';
+            alert('Consolidated report downloaded and emailed to javacsedscs@gmail.com');
+        } catch(e) {
+            console.error(e);
+            document.getElementById('admin-download-pdf-btn').textContent = 'Download PDF Report';
+            alert('Downloaded locally, but failed to email PDF.');
+        }
     });
 });
+
+window.emailStudentReport = async function(roll) {
+    let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
+    let email = results[roll] && results[roll].email;
+    if (!email) {
+        email = prompt("Enter email address to send the PDF report for " + roll + ":");
+        if (!email) return;
+        if (results[roll]) {
+            results[roll].email = email;
+            localStorage.setItem('assessment_results', JSON.stringify(results));
+        }
+    }
+    
+    // Ensure the report is rendered
+    viewStudentReport(roll);
+    
+    const container = document.getElementById('student-report-content');
+    const opt = {
+        margin:       [0.5, 0.5, 0.5, 0.5],
+        filename:     roll + '_Report.pdf',
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2, backgroundColor: '#ffffff' },
+        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    
+    try {
+        const btn = window.event ? window.event.target : null;
+        const originalText = btn ? btn.textContent : 'Email PDF';
+        if (btn) { btn.textContent = 'Sending...'; btn.disabled = true; }
+        
+        const pdfBase64 = await html2pdf().set(opt).from(container).outputPdf('datauristring');
+        const res = await fetch('http://localhost:3000/send-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                toEmail: email,
+                pdfBase64: pdfBase64,
+                filename: roll + '_Report.pdf',
+                isConsolidated: false
+            })
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert('PDF successfully sent to ' + email);
+        } else {
+            alert('Failed to send PDF: ' + data.error);
+        }
+        if (btn) { btn.textContent = originalText; btn.disabled = false; }
+    } catch(e) {
+        console.error(e);
+        alert('Error sending PDF.');
+    }
+};
 
 // --- ANTI-CHEAT & SHORTCUTS ---
 document.addEventListener('keydown', (e) => {

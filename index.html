@@ -184,14 +184,13 @@
     <header class="e-header" style="justify-content:space-between;">
         <div class="header-main-row" style="border-bottom:none;width:100%;">
             <span class="header-title" style="font-size:20px;color:var(--accent2);">Exam Administrator Dashboard</span>
-            <div style="display:flex;gap:12px;">
-                <button id="admin-add-student-btn" class="run-btn" style="background:#10b981;">Add Student</button>
-                <button id="admin-clear-btn" class="clear-btn" style="border-color:var(--red);color:var(--red);">Clear All Data</button>
-                <button id="admin-download-btn" class="run-btn" style="background:var(--blue-light);">Download CSV</button>
-                <button id="admin-download-pdf-btn" class="run-btn" style="background:var(--accent);">Download PDF Report</button>
-                <button id="admin-change-pwd-btn" class="clear-btn" style="border-color:var(--yellow);color:var(--yellow);">Change Password</button>
-                <button id="admin-logout-btn" class="clear-btn">Logout</button>
-            </div>
+            <div style="display:flex; gap:16px; align-items:center;">
+          <span id="exam-status-indicator" style="padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;background:rgba(16,185,129,0.15);color:#34d399;">EXAM OPEN</span>
+          <button id="toggle-exam-btn" class="clear-btn" style="border:1px solid rgba(255,255,255,0.2);">Close Exam</button>
+          <button id="admin-download-btn" class="run-btn" style="padding:8px 16px; font-size:12px;">↓ Download Report</button>
+          <button id="admin-clear-btn" class="clear-btn" style="padding:8px 16px; font-size:12px; border-color:var(--red); color:var(--red);">Clear All Data</button>
+          <button id="admin-logout-btn" class="clear-btn" style="padding:8px 16px; font-size:12px;">Logout</button>
+        </div>
         </div>
     </header>
     <div id="admin-report-container" style="padding:40px;max-width:1200px;margin:0 auto;width:100%;">
@@ -205,13 +204,14 @@
             <table id="admin-table" style="width:100%;border-collapse:collapse;color:var(--text);font-size:14px;text-align:left;">
                 <thead>
                     <tr style="background:rgba(255,255,255,.05);border-bottom:1px solid var(--border);font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);text-transform:uppercase;">
-                        <th style="padding:16px 20px;">S.No</th>
-                        <th style="padding:16px 20px;">Roll No</th>
-                        <th style="padding:16px 20px;">Name</th>
-                        <th style="padding:16px 20px;">Branch</th>
-                        <th style="padding:16px 20px;">Status</th>
-                        <th style="padding:16px 20px;">Marks</th>
-                        <th style="padding:16px 20px;">Action</th>
+                        <th style="padding:16px 20px;text-align:left;font-weight:600;color:var(--muted);width:5%;">#</th>
+            <th style="padding:16px 20px;text-align:left;font-weight:600;color:var(--muted);width:15%;">Roll No</th>
+            <th style="padding:16px 20px;text-align:left;font-weight:600;color:var(--muted);width:20%;">Name</th>
+            <th style="padding:16px 20px;text-align:left;font-weight:600;color:var(--muted);width:15%;">Branch</th>
+            <th style="padding:16px 20px;text-align:left;font-weight:600;color:var(--muted);width:10%;">Auth Mode</th>
+            <th style="padding:16px 20px;text-align:left;font-weight:600;color:var(--muted);width:10%;">Status</th>
+            <th style="padding:16px 20px;text-align:left;font-weight:600;color:var(--muted);width:10%;">Marks</th>
+            <th style="padding:16px 20px;text-align:left;font-weight:600;color:var(--muted);width:15%;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="admin-tbody">
@@ -314,5 +314,23 @@
 <script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
 <!-- Custom JS -->
 <script src="app.js"></script>
+<!-- OTP Modal -->
+<div id="otp-modal" class="modal-overlay">
+  <div class="modal-content" style="max-width:400px; text-align:center;">
+    <h2 style="font-size:20px;margin-bottom:8px;font-family:'Space Mono',monospace;">Email Verification</h2>
+    <p style="color:var(--muted);font-size:14px;margin-bottom:24px;">Enter your email to receive a 6-digit OTP code.</p>
+    <div style="text-align:left;margin-bottom:16px;" id="otp-email-step">
+       <input type="email" id="student-email-input" placeholder="Enter your email ID" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:8px;outline:none;">
+       <button id="send-otp-btn" class="run-btn" style="width:100%;margin-top:12px;">Send Code</button>
+    </div>
+    <div style="text-align:left;display:none;margin-bottom:16px;" id="otp-code-step">
+       <input type="text" id="student-otp-input" placeholder="000000" maxlength="6" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:8px;letter-spacing:8px;text-align:center;font-size:24px;font-family:'Space Mono',monospace;outline:none;">
+       <button id="verify-otp-btn" class="run-btn" style="width:100%;margin-top:12px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);">Verify & Start Exam</button>
+    </div>
+    <div id="otp-error" style="color:#ef4444;font-size:12px;margin-top:12px;display:none;"></div>
+    <button class="clear-btn" style="margin-top:16px;" onclick="document.getElementById('otp-modal').classList.remove('active')">Cancel</button>
+  </div>
+</div>
+
 </body>
 </html>
