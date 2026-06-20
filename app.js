@@ -1543,7 +1543,7 @@ document.getElementById('admin-download-btn').addEventListener('click', () => {
   document.body.removeChild(link);
 });
 
-document.getElementById('admin-download-pdf-btn').addEventListener('click', () => {
+document.getElementById('admin-download-btn').addEventListener('click', () => {
     // We will generate PDF of the entire admin-report-container
     // First, let's inject a header with date
     const container = document.getElementById('admin-report-container');
@@ -1590,7 +1590,7 @@ document.getElementById('admin-download-pdf-btn').addEventListener('click', () =
         
         // Send email
         try {
-            document.getElementById('admin-download-pdf-btn').textContent = 'Sending Email...';
+            document.getElementById('admin-download-btn').textContent = 'Sending Email...';
             await fetch('http://localhost:3000/send-pdf', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1601,11 +1601,11 @@ document.getElementById('admin-download-pdf-btn').addEventListener('click', () =
                     isConsolidated: true
                 })
             });
-            document.getElementById('admin-download-pdf-btn').textContent = 'Download PDF Report';
+            document.getElementById('admin-download-btn').textContent = 'Download PDF Report';
             alert('Consolidated report downloaded and emailed to javacsedscs@gmail.com');
         } catch(e) {
             console.error(e);
-            document.getElementById('admin-download-pdf-btn').textContent = 'Download PDF Report';
+            document.getElementById('admin-download-btn').textContent = 'Download PDF Report';
             alert('Downloaded locally, but failed to email PDF.');
         }
     });
@@ -1712,73 +1712,79 @@ window.addEventListener('beforeunload', function (e) {
 
 
 // --- ADMIN CHANGE PASSWORD LOGIC ---
-document.getElementById('admin-change-pwd-btn').addEventListener('click', () => {
-    document.getElementById('current-pwd-input').value = '';
-    document.getElementById('new-pwd-input').value = '';
-    document.getElementById('change-pwd-modal').classList.add('active');
-});
+const changePwdBtn = document.getElementById('admin-change-pwd-btn');
+if (changePwdBtn) {
+    changePwdBtn.addEventListener('click', () => {
+        document.getElementById('current-pwd-input').value = '';
+        document.getElementById('new-pwd-input').value = '';
+        document.getElementById('change-pwd-modal').classList.add('active');
+    });
 
-document.getElementById('close-pwd-btn').addEventListener('click', () => {
-    document.getElementById('change-pwd-modal').classList.remove('active');
-});
+    document.getElementById('close-pwd-btn').addEventListener('click', () => {
+        document.getElementById('change-pwd-modal').classList.remove('active');
+    });
 
-document.getElementById('save-pwd-btn').addEventListener('click', () => {
-    const currentInput = document.getElementById('current-pwd-input').value;
-    const newPwd = document.getElementById('new-pwd-input').value;
-    const actualPwd = localStorage.getItem('admin_password') || 'ADMIN123';
-    
-    if (currentInput !== actualPwd && currentInput !== 'ADMIN') {
-        alert("Incorrect current password!");
-        return;
-    }
-    if (!newPwd || newPwd.length < 4) {
-        alert("New password must be at least 4 characters.");
-        return;
-    }
-    
-    localStorage.setItem('admin_password', newPwd);
-    alert("Password successfully changed!");
-    document.getElementById('change-pwd-modal').classList.remove('active');
-});
+    document.getElementById('save-pwd-btn').addEventListener('click', () => {
+        const currentInput = document.getElementById('current-pwd-input').value;
+        const newPwd = document.getElementById('new-pwd-input').value;
+        const actualPwd = localStorage.getItem('admin_password') || 'ADMIN123';
+        
+        if (currentInput !== actualPwd && currentInput !== 'ADMIN') {
+            alert("Incorrect current password!");
+            return;
+        }
+        if (!newPwd || newPwd.length < 4) {
+            alert("New password must be at least 4 characters.");
+            return;
+        }
+        
+        localStorage.setItem('admin_password', newPwd);
+        alert("Password successfully changed!");
+        document.getElementById('change-pwd-modal').classList.remove('active');
+    });
+}
 
 // --- ADMIN ADD STUDENT LOGIC ---
-document.getElementById('admin-add-student-btn').addEventListener('click', () => {
-    document.getElementById('add-roll-input').value = '';
-    document.getElementById('add-name-input').value = '';
-    document.getElementById('add-branch-input').value = '';
-    document.getElementById('add-student-modal').classList.add('active');
-});
+const addStudentBtn = document.getElementById('admin-add-student-btn');
+if (addStudentBtn) {
+    addStudentBtn.addEventListener('click', () => {
+        document.getElementById('add-roll-input').value = '';
+        document.getElementById('add-name-input').value = '';
+        document.getElementById('add-branch-input').value = '';
+        document.getElementById('add-student-modal').classList.add('active');
+    });
 
-document.getElementById('close-add-btn').addEventListener('click', () => {
-    document.getElementById('add-student-modal').classList.remove('active');
-});
+    document.getElementById('close-add-btn').addEventListener('click', () => {
+        document.getElementById('add-student-modal').classList.remove('active');
+    });
 
-document.getElementById('save-add-btn').addEventListener('click', () => {
-    const newRoll = document.getElementById('add-roll-input').value.trim().toUpperCase();
-    const newName = document.getElementById('add-name-input').value.trim();
-    const newBranch = document.getElementById('add-branch-input').value.trim();
-    
-    if (!newRoll || !newName || !newBranch) return;
+    document.getElementById('save-add-btn').addEventListener('click', () => {
+        const newRoll = document.getElementById('add-roll-input').value.trim().toUpperCase();
+        const newName = document.getElementById('add-name-input').value.trim();
+        const newBranch = document.getElementById('add-branch-input').value.trim();
+        
+        if (!newRoll || !newName || !newBranch) return;
 
-    if (studentMap[newRoll]) {
-        alert("A student with this Roll Number already exists!");
-        return;
-    }
+        if (studentMap[newRoll]) {
+            alert("A student with this Roll Number already exists!");
+            return;
+        }
 
-    const newStudent = { name: newName, roll: newRoll, branch: newBranch };
-    
-    // Add to current in-memory lists
-    students.push(newStudent);
-    studentMap[newRoll] = { ...newStudent, idx: students.length - 1 };
-    
-    // Persist custom students
-    let customStudents = JSON.parse(localStorage.getItem('custom_students') || '[]');
-    customStudents.push(newStudent);
-    localStorage.setItem('custom_students', JSON.stringify(customStudents));
-    
-    document.getElementById('add-student-modal').classList.remove('active');
-    renderAdmin();
-});
+        const newStudent = { name: newName, roll: newRoll, branch: newBranch };
+        
+        // Add to current in-memory lists
+        students.push(newStudent);
+        studentMap[newRoll] = { ...newStudent, idx: students.length - 1 };
+        
+        // Persist custom students
+        let customStudents = JSON.parse(localStorage.getItem('custom_students') || '[]');
+        customStudents.push(newStudent);
+        localStorage.setItem('custom_students', JSON.stringify(customStudents));
+        
+        document.getElementById('add-student-modal').classList.remove('active');
+        renderAdmin();
+    });
+}
 
 // --- ADMIN EDIT STUDENT LOGIC ---
 window.openEditStudent = function(roll) {
