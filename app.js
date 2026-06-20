@@ -1614,14 +1614,87 @@ document.getElementById('admin-download-btn').addEventListener('click', () => {
                     isConsolidated: true
                 })
             });
-            document.getElementById('admin-download-btn').textContent = 'Download PDF Report';
+            document.getElementById('admin-download-btn').textContent = '↓ Download PDF';
             alert('Consolidated report downloaded and emailed to javacsedscs@gmail.com');
         } catch(e) {
             console.error(e);
-            document.getElementById('admin-download-btn').textContent = 'Download PDF Report';
+            document.getElementById('admin-download-btn').textContent = '↓ Download PDF';
             alert('Downloaded locally, but failed to email PDF.');
         }
     });
+});
+
+document.getElementById('admin-download-csv-btn').addEventListener('click', () => {
+    let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
+    
+    // Sort students by branch, then by roll number ascending
+    let sortedStudents = [...students].sort((a, b) => {
+        if (a.branch < b.branch) return -1;
+        if (a.branch > b.branch) return 1;
+        if (a.roll < b.roll) return -1;
+        if (a.roll > b.roll) return 1;
+        return 0;
+    });
+
+    const csvRows = [];
+    // Header row
+    csvRows.push(['S.No.', 'Roll Number', 'Name', 'Branch', 'Status', 'Marks', 'Time Taken (mins)', 'Submission Time'].map(val => `"${val.replace(/"/g, '""')}"`).join(','));
+
+    sortedStudents.forEach((s, idx) => {
+        const res = results[s.roll];
+        const isSub = res && res.status === 'SUBMITTED';
+        const isAbs = res && res.status === 'ABSENT';
+        const isActive = res && res.status === 'ACTIVE';
+        const isIdle = res && res.status === 'IDLE';
+
+        let statusText = 'PENDING';
+        let marksText = '-';
+        let timeTakenText = '-';
+        let subTimeText = '-';
+
+        if (isAbs) {
+            statusText = 'ABSENT';
+        } else if (isSub) {
+            statusText = 'SUBMITTED';
+            if (res.marks >= 40) statusText += ' (EXCELLENT)';
+            else if (res.marks >= 30) statusText += ' (PASS)';
+            else statusText += ' (FAIL)';
+            
+            marksText = res.marks + ' / 50';
+            timeTakenText = res.timeTaken ? res.timeTaken : '-';
+            subTimeText = res.timestamp ? new Date(res.timestamp).toLocaleString() : '-';
+        } else if (isActive) {
+            statusText = 'ACTIVE';
+        } else if (isIdle) {
+            statusText = 'IDLE';
+        }
+
+        const row = [
+            idx + 1,
+            s.roll,
+            s.name,
+            s.branch,
+            statusText,
+            marksText,
+            timeTakenText,
+            subTimeText
+        ];
+
+        csvRows.push(row.map(val => {
+            const strVal = String(val === null || val === undefined ? '' : val);
+            return `"${strVal.replace(/"/g, '""')}"`;
+        }).join(','));
+    });
+
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Consolidated_Branch_Report_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 });
 
 window.emailStudentReport = async function(roll) {
