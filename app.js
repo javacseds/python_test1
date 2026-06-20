@@ -1521,27 +1521,6 @@ document.getElementById('admin-clear-btn').addEventListener('click', () => {
   }
 });
 
-document.getElementById('admin-download-btn').addEventListener('click', () => {
-  let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
-  let csv = "S.No,Roll Number,Student Name,Branch,Status,Marks\n";
-  
-  students.forEach((s, i) => {
-    const res = results[s.roll];
-    const status = res ? "Submitted" : "Pending";
-    const marks = res ? res.marks : 0;
-    csv += `${i + 1},${s.roll},"${s.name}",${s.branch},${status},${marks}\n`;
-  });
-  
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  link.setAttribute('download', 'Python_Assessment_Results.csv');
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-});
 
 document.getElementById('admin-download-btn').addEventListener('click', () => {
     // We will generate PDF of the entire admin-report-container

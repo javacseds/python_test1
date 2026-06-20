@@ -184,9 +184,11 @@
     <header class="e-header" style="justify-content:space-between;">
         <div class="header-main-row" style="border-bottom:none;width:100%;">
             <span class="header-title" style="font-size:20px;color:var(--accent2);">Exam Administrator Dashboard</span>
-            <div style="display:flex; gap:16px; align-items:center;">
+            <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
           <span id="exam-status-indicator" style="padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;background:rgba(16,185,129,0.15);color:#34d399;">EXAM OPEN</span>
           <button id="toggle-exam-btn" class="clear-btn" style="border:1px solid rgba(255,255,255,0.2);">Close Exam</button>
+          <button id="admin-add-student-btn" class="run-btn" style="padding:8px 16px; font-size:12px; background:linear-gradient(135deg,#6366f1,#818cf8);">+ Add Student</button>
+          <button id="admin-change-pwd-btn" class="clear-btn" style="padding:8px 16px; font-size:12px; border:1px solid rgba(255,255,255,0.2);">🔒 Change Password</button>
           <button id="admin-download-btn" class="run-btn" style="padding:8px 16px; font-size:12px;">↓ Download Report</button>
           <button id="admin-clear-btn" class="clear-btn" style="padding:8px 16px; font-size:12px; border-color:var(--red); color:var(--red);">Clear All Data</button>
           <button id="admin-logout-btn" class="clear-btn" style="padding:8px 16px; font-size:12px;">Logout</button>
@@ -305,16 +307,7 @@
     </div>
 </div>
 
-<!-- html2pdf JS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<!-- CodeMirror JS -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
-<!-- Pyodide JS -->
-<script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
-<!-- Custom JS -->
-<script src="app.js"></script>
-<!-- OTP Modal -->
+<!-- OTP Modal (must be before app.js) -->
 <div id="otp-modal" class="modal-overlay">
   <div class="modal-content" style="max-width:400px; text-align:center;">
     <h2 style="font-size:20px;margin-bottom:8px;font-family:'Space Mono',monospace;">Email Verification</h2>
@@ -325,12 +318,22 @@
     </div>
     <div style="text-align:left;display:none;margin-bottom:16px;" id="otp-code-step">
        <input type="text" id="student-otp-input" placeholder="000000" maxlength="6" style="width:100%;padding:12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:8px;letter-spacing:8px;text-align:center;font-size:24px;font-family:'Space Mono',monospace;outline:none;">
-       <button id="verify-otp-btn" class="run-btn" style="width:100%;margin-top:12px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);">Verify & Start Exam</button>
+       <button id="verify-otp-btn" class="run-btn" style="width:100%;margin-top:12px;background:linear-gradient(135deg,#10b981 0%,#059669 100%);">Verify &amp; Start Exam</button>
     </div>
     <div id="otp-error" style="color:#ef4444;font-size:12px;margin-top:12px;display:none;"></div>
     <button class="clear-btn" style="margin-top:16px;" onclick="document.getElementById('otp-modal').classList.remove('active')">Cancel</button>
   </div>
 </div>
+
+<!-- html2pdf JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<!-- CodeMirror JS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/mode/python/python.min.js"></script>
+<!-- Pyodide JS -->
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+<!-- Custom JS -->
+<script src="app.js"></script>
 
 </body>
 </html>
