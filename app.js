@@ -329,6 +329,10 @@ function getStudentQuestions(studentIdx) {
 }
 
 
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+  ? 'http://localhost:3000' 
+  : '';
+
 // ═══════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════
@@ -449,11 +453,11 @@ async function attemptLogin() {
 
   try {
       // 1. Live database status check to prevent concurrent parallel logins
-      if (window.firebaseDb && window.firebaseGetDoc && window.firebaseDoc) {
-          const docRef = window.firebaseDoc(window.firebaseDb, "results", roll);
-          const docSnap = await window.firebaseGetDoc(docRef);
-          if (docSnap.exists()) {
-              const liveData = docSnap.data();
+      try {
+          const res = await fetch(`${API_BASE}/api/results/${roll}`);
+          const data = await res.json();
+          if (data.exists) {
+              const liveData = data.data;
               if (liveData.status === "ABSENT") {
                   loginError.textContent = "⚠ Exam has been deactivated for this student (Marked Absent).";
                   loginError.style.display = 'block';
@@ -487,6 +491,8 @@ async function attemptLogin() {
                   }
               }
           }
+      } catch(e) {
+          console.error("Live database status check failed", e);
       }
   } catch(e) {
       console.error("Live database status check failed", e);
@@ -543,7 +549,7 @@ document.getElementById('send-otp-btn').addEventListener('click', async () => {
     
     document.getElementById('send-otp-btn').textContent = 'Sending...';
     try {
-        const res = await fetch('http://localhost:3000/send-otp', {
+        const res = await fetch(`${API_BASE}/api/send-otp`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ roll: student.roll, email })
@@ -570,7 +576,7 @@ document.getElementById('verify-otp-btn').addEventListener('click', async () => 
     
     document.getElementById('verify-otp-btn').textContent = 'Verifying...';
     try {
-        const res = await fetch('http://localhost:3000/verify-otp', {
+        const res = await fetch(`${API_BASE}/api/verify-otp`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ roll: student.roll, code })
@@ -623,11 +629,16 @@ async function syncStudentHeartbeat() {
     results[currentStudent.roll] = { ...results[currentStudent.roll], ...payload };
     localStorage.setItem('assessment_results', JSON.stringify(results));
     
-    if (window.firebaseDb && window.firebaseSetDoc) {
-        try {
-            await window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", currentStudent.roll), payload, { merge: true });
-        } catch(e) { console.error("Heartbeat sync failed", e); }
-    }
+    try {
+        await fetch(`${API_BASE}/api/results`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                roll: currentStudent.roll,
+                ...payload
+            })
+        });
+    } catch(e) { console.error("PostgreSQL heartbeat sync failed", e); }
 }
 function startExam(student) {
   currentStudent = student;
@@ -993,9 +1004,9 @@ function autoSaveProgress() {
   localStorage.setItem('assessment_results', JSON.stringify(results));
 }
 
-// Push local progress to Firestore database
+// Push local progress to PostgreSQL database
 async function syncProgressToFirebase() {
-  if (!currentStudent || !window.firebaseDb || !window.firebaseSetDoc) return;
+  if (!currentStudent) return;
   
   let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
   const studentData = results[currentStudent.roll];
@@ -1005,10 +1016,17 @@ async function syncProgressToFirebase() {
   if (studentData.status === "SUBMITTED") return;
 
   try {
-    await window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", currentStudent.roll), studentData, { merge: true });
-    console.log("Successfully synced progress to Firebase.");
+    await fetch(`${API_BASE}/api/results`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            roll: currentStudent.roll,
+            ...studentData
+        })
+    });
+    console.log("Successfully synced progress to PostgreSQL.");
   } catch(e) {
-    console.error("Firebase sync failed", e);
+    console.error("PostgreSQL sync failed", e);
   }
 }
 
@@ -1446,13 +1464,20 @@ async function saveResultToLocal(roll, attemptedCount, marks, status, questionDe
   results[roll] = { ...(results[roll] || {}), ...resultData };
   localStorage.setItem('assessment_results', JSON.stringify(results));
 
-  if (window.firebaseDb && window.firebaseSetDoc) {
-     try {
-         await window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", roll), resultData, { merge: true });
-         console.log("Successfully synced to Firebase!");
-     } catch(e) {
-         console.error("Failed to sync to Firebase", e);
-     }
+  try {
+      await fetch(`${API_BASE}/api/results`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+              roll: roll,
+              name: currentStudent ? currentStudent.name : null,
+              branch: currentStudent ? currentStudent.branch : null,
+              ...resultData
+          })
+      });
+      console.log("Successfully synced final result to PostgreSQL!");
+  } catch(e) {
+      console.error("Failed to sync final result to PostgreSQL", e);
   }
 }
 
@@ -1493,18 +1518,17 @@ async function renderAdmin(skipFirebaseFetch = false) {
   
   let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
   
-  if (!skipFirebaseFetch && window.firebaseDb && window.firebaseGetDocs) {
+  if (!skipFirebaseFetch) {
       try {
           if (!tbody.innerHTML || tbody.innerHTML.trim() === '') {
-              tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted);">Loading live results from Firebase...</td></tr>';
+              tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted);">Loading live results from PostgreSQL...</td></tr>';
           }
-          const querySnapshot = await window.firebaseGetDocs(window.firebaseCollection(window.firebaseDb, "results"));
-          querySnapshot.forEach((doc) => {
-              results[doc.id] = doc.data();
-          });
+          const res = await fetch(`${API_BASE}/api/results`);
+          const dbResults = await res.json();
+          results = { ...results, ...dbResults };
           localStorage.setItem('assessment_results', JSON.stringify(results));
       } catch (e) {
-          console.error("Error fetching from Firebase. Using local results.", e);
+          console.error("Error fetching from PostgreSQL. Using local results.", e);
       }
   }
   tbody.innerHTML = '';
@@ -1881,7 +1905,7 @@ document.getElementById('admin-download-btn').addEventListener('click', () => {
         // Send email
         try {
             document.getElementById('admin-download-btn').textContent = 'Sending Email...';
-            await fetch('http://localhost:3000/send-pdf', {
+            await fetch(`${API_BASE}/api/send-pdf`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -2004,7 +2028,7 @@ window.emailStudentReport = async function(roll) {
         if (btn) { btn.textContent = 'Sending...'; btn.disabled = true; }
         
         const pdfBase64 = await html2pdf().set(opt).from(container).outputPdf('datauristring');
-        const res = await fetch('http://localhost:3000/send-pdf', {
+        const res = await fetch(`${API_BASE}/api/send-pdf`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
