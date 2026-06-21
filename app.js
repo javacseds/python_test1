@@ -615,8 +615,11 @@ function startExam(student) {
 
   lastActivityTime = Date.now();
   if (window.heartbeatInterval) clearInterval(window.heartbeatInterval);
-  window.heartbeatInterval = setInterval(syncStudentHeartbeat, 2000);
+  window.heartbeatInterval = setInterval(syncStudentHeartbeat, 30000); // Heartbeat every 30 seconds
   syncStudentHeartbeat();
+
+  if (window.firebaseSyncInterval) clearInterval(window.firebaseSyncInterval);
+  window.firebaseSyncInterval = setInterval(syncProgressToFirebase, 60000); // Progress sync every 60 seconds
 }
 
 // ═══════════════════════════════════════════════════════
@@ -641,6 +644,7 @@ function switchTab(i) {
   if (typeof editor !== 'undefined') { codes[currentTab] = editor.getValue(); } else { codes[currentTab] = ''; }
   stdins[currentTab] = document.getElementById('stdin-input').value;
   autoSaveProgress();
+  syncProgressToFirebase();
 
   // update tab state
   document.getElementById(`tab-${currentTab}`).classList.remove('active');
@@ -930,10 +934,24 @@ function autoSaveProgress() {
   };
 
   localStorage.setItem('assessment_results', JSON.stringify(results));
+}
 
-  if (window.firebaseDb && window.firebaseSetDoc) {
-    window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", currentStudent.roll), results[currentStudent.roll], { merge: true })
-      .catch(e => console.error("Firebase auto-save failed", e));
+// Push local progress to Firestore database
+async function syncProgressToFirebase() {
+  if (!currentStudent || !window.firebaseDb || !window.firebaseSetDoc) return;
+  
+  let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
+  const studentData = results[currentStudent.roll];
+  if (!studentData) return;
+  
+  // Avoid overwriting a submitted exam
+  if (studentData.status === "SUBMITTED") return;
+
+  try {
+    await window.firebaseSetDoc(window.firebaseDoc(window.firebaseDb, "results", currentStudent.roll), studentData, { merge: true });
+    console.log("Successfully synced progress to Firebase.");
+  } catch(e) {
+    console.error("Firebase sync failed", e);
   }
 }
 
@@ -1225,6 +1243,7 @@ _grade_run()
         }
     }
     updateProgress();
+    syncProgressToFirebase();
 });
 
 document.getElementById('clear-btn').addEventListener('click', () => {
