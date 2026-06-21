@@ -417,7 +417,7 @@ document.getElementById('admin-password-input').addEventListener('keydown', e =>
     if (e.key === 'Enter') document.getElementById('admin-login-btn').click();
 });
 
-function attemptLogin() {
+async function attemptLogin() {
   const roll = rollInput.value.trim().toUpperCase();
   if (!roll) return;
   
@@ -442,21 +442,78 @@ function attemptLogin() {
       return;
   }
 
+  const loginBtn = document.getElementById('login-btn');
+  const originalBtnText = loginBtn.textContent;
+  loginBtn.textContent = "Verifying...";
+  loginBtn.disabled = true;
+
+  try {
+      // 1. Live database status check to prevent concurrent parallel logins
+      if (window.firebaseDb && window.firebaseGetDoc && window.firebaseDoc) {
+          const docRef = window.firebaseDoc(window.firebaseDb, "results", roll);
+          const docSnap = await window.firebaseGetDoc(docRef);
+          if (docSnap.exists()) {
+              const liveData = docSnap.data();
+              if (liveData.status === "ABSENT") {
+                  loginError.textContent = "⚠ Exam has been deactivated for this student (Marked Absent).";
+                  loginError.style.display = 'block';
+                  rollInput.focus();
+                  loginBtn.textContent = originalBtnText;
+                  loginBtn.disabled = false;
+                  return;
+              }
+              if (liveData.status === "SUBMITTED") {
+                  loginError.textContent = "⚠ This student has already submitted the exam.";
+                  loginError.style.display = 'block';
+                  rollInput.focus();
+                  loginBtn.textContent = originalBtnText;
+                  loginBtn.disabled = false;
+                  return;
+              }
+              if (liveData.status === "ACTIVE" || liveData.status === "IDLE") {
+                  if (liveData.lastSyncStr) {
+                      const lastSync = new Date(liveData.lastSyncStr).getTime();
+                      const now = Date.now();
+                      const diffSeconds = (now - lastSync) / 1000;
+                      // If the last heartbeat was received within the last 60 seconds, block parallel login
+                      if (diffSeconds < 60) {
+                          loginError.textContent = "⚠ This Roll Number is already active on another device/tab.";
+                          loginError.style.display = 'block';
+                          rollInput.focus();
+                          loginBtn.textContent = originalBtnText;
+                          loginBtn.disabled = false;
+                          return;
+                      }
+                  }
+              }
+          }
+      }
+  } catch(e) {
+      console.error("Live database status check failed", e);
+  }
+
+  // 2. Local storage backup checks
   let results = JSON.parse(localStorage.getItem('assessment_results') || '{}');
   if (results[roll] && results[roll].status === "ABSENT") {
       loginError.textContent = "⚠ Exam has been deactivated for this student (Marked Absent).";
       loginError.style.display = 'block';
       rollInput.focus();
+      loginBtn.textContent = originalBtnText;
+      loginBtn.disabled = false;
       return;
   }
   if (results[roll] && results[roll].status === "SUBMITTED") {
       loginError.textContent = "⚠ This student has already submitted the exam.";
       loginError.style.display = 'block';
       rollInput.focus();
+      loginBtn.textContent = originalBtnText;
+      loginBtn.disabled = false;
       return;
   }
 
   loginError.style.display = 'none';
+  loginBtn.textContent = originalBtnText;
+  loginBtn.disabled = false;
 
   // Check Auth Mode
   const authModes = JSON.parse(localStorage.getItem('student_auth_modes') || '{}');
